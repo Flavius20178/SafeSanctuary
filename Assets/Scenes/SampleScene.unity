@@ -13012,11 +13012,7 @@ Light:
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
 <<<<<<< Updated upstream
-<<<<<<< Updated upstream
   m_BoundingSphereOverride: {x: 1.02e-43, y: 3e-45, z: 3.379e-42, w: 0}
-=======
-  m_BoundingSphereOverride: {x: NaN, y: 6e-44, z: 0, w: 1.9042e-41}
->>>>>>> Stashed changes
 =======
   m_BoundingSphereOverride: {x: NaN, y: 6e-44, z: 0, w: 1.9042e-41}
 >>>>>>> Stashed changes
@@ -18203,15 +18199,9 @@ SceneRoots:
   - {fileID: 1565887663878291441}
   - {fileID: 1703568386}
 <<<<<<< Updated upstream
-<<<<<<< Updated upstream
 =======
-=======
->>>>>>> Stashed changes
   - {fileID: 870163722}
   - {fileID: 546910726}
   - {fileID: 1453695710}
   - {fileID: 113795542}
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
 >>>>>>> Stashed changes
