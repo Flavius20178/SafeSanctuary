@@ -12604,7 +12604,15 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
+<<<<<<< HEAD
   m_BoundingSphereOverride: {x: 1.02e-43, y: 3e-45, z: 3.379e-42, w: 0}
+=======
+<<<<<<< Updated upstream
+  m_BoundingSphereOverride: {x: 1.02e-43, y: 3e-45, z: 3.379e-42, w: 0}
+=======
+  m_BoundingSphereOverride: {x: NaN, y: 6e-44, z: 0, w: 1.9042e-41}
+>>>>>>> Stashed changes
+>>>>>>> parent of 6c3c4fe (Added the Basics)
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ShadowRadius: 0
@@ -17694,3 +17702,13 @@ SceneRoots:
   - {fileID: 1783572214}
   - {fileID: 1565887663878291441}
   - {fileID: 1703568386}
+<<<<<<< HEAD
+=======
+<<<<<<< Updated upstream
+=======
+  - {fileID: 870163722}
+  - {fileID: 546910726}
+  - {fileID: 1453695710}
+  - {fileID: 113795542}
+>>>>>>> Stashed changes
+>>>>>>> parent of 6c3c4fe (Added the Basics)
