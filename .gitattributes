@@ -32,3 +32,8 @@
 /Assets/Rowlan/Terrain/Stamps/Examples/Heightmaps/Rolling[[:space:]]Hills[[:space:]]06.png filter=lfs diff=lfs merge=lfs -text
 /Assets/Rowlan/Terrain/Stamps/Examples/Heightmaps/Steep[[:space:]]Rocky[[:space:]]Cliffs[[:space:]]02.png filter=lfs diff=lfs merge=lfs -text
 /Assets/Rowlan/Terrain/Stamps/Examples/Heightmaps/Stranger[[:space:]]Lands[[:space:]]06.png filter=lfs diff=lfs merge=lfs -text
+/Assets/3D_Game_Assets_Flora/Models/Lotus/Material/Leaf_flower(bake)_alphamask.psd filter=lfs diff=lfs merge=lfs -text
+/Assets/ALP_Assets/Big[[:space:]]Oak[[:space:]]Tree[[:space:]]FREE/Graphics[[:space:]]Settings.rtf filter=lfs diff=lfs merge=lfs -text
+/Assets/ALP_Assets/Big[[:space:]]Oak[[:space:]]Tree[[:space:]]FREE/Scenes/Graphics[[:space:]]Settings.rtf filter=lfs diff=lfs merge=lfs -text
+/Assets/GrassFlowers/Demo/DemoGrassFlowers.unity filter=lfs diff=lfs merge=lfs -text
+/Assets/GrassFlowers/Textures/Ground/Grass01_BigUV.png filter=lfs diff=lfs merge=lfs -text
