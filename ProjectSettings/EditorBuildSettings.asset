@@ -8,6 +8,18 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/SampleScene.unity
     guid: 55daccc09a3b69647bbab145b54a3ab3
+  - enabled: 1
+    path: Assets/Scenes/1 Start Scene.unity
+    guid: 99c9720ab356a0642a771bea13969a05
+  - enabled: 1
+    path: Assets/beach.unity
+    guid: 570facd90dd74d042b1b8fcc0f6a928e
+  - enabled: 1
+    path: Assets/Boat.unity
+    guid: 9a03ab1f9c88e0847b080d215227bf33
+  - enabled: 1
+    path: Assets/Waterfall.unity
+    guid: c4d8b6197544a1947850b339ab62d6b6
   m_configObjects:
     Unity.XR.Oculus.Settings: {fileID: 11400000, guid: 7c190a1aeb1d26d4d9db98d78a55f270, type: 2}
     Unity.XR.WindowsMR.Settings: {fileID: 11400000, guid: dc5a169419fa04987b057f65238cf3ba, type: 2}
