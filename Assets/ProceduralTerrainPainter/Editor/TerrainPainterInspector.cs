@@ -1,19 +1,20 @@
 ﻿// Procedural Terrain Painter by Staggart Creations http://staggart.xyz
 // Copyright protected under Unity Asset Store EULA
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
 #if __MICROSPLAT__
 using System.Reflection;
 using JBooth.MicroSplat;
 #endif
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.AnimatedValues;
 using UnityEditorInternal;
 using UnityEngine;
 #if UNITY_2021_2_OR_NEWER
 using UnityEngine.TerrainTools;
+
 #else
 using UnityEngine.Experimental.TerrainAPI;
 #endif
@@ -23,15 +24,15 @@ namespace sc.terrain.proceduralpainter
     [CustomEditor(typeof(TerrainPainter))]
     public class TerrainPainterInspector : Editor
     {
-        TerrainPainter script;
+        private TerrainPainter script;
         private SerializedProperty layerSettings;
         private SerializedProperty resolution;
         private SerializedProperty colorMapResolution;
         private SerializedProperty terrains;
         private SerializedProperty autoRepaint;
-        private Dictionary<LayerSettings, ReorderableList> m_modifierList = new Dictionary<LayerSettings, ReorderableList>();
+        private readonly Dictionary<LayerSettings, ReorderableList> m_modifierList = new();
         private ReorderableList curModList;
-        
+
         //Setup warnings
         private bool hasMissingTerrains;
         private bool instancedTerrains;
@@ -45,11 +46,13 @@ namespace sc.terrain.proceduralpainter
         private bool requiresConfigRebuild;
 #endif
         private bool requiresRepaint;
+
         private bool heatmapEnabled
         {
             get => SessionState.GetBool("PTP_HEATMAP", false);
             set => SessionState.SetBool("PTP_HEATMAP", value);
         }
+
         private bool visualizeContour;
         private bool visualizeTiling;
 
@@ -58,52 +61,53 @@ namespace sc.terrain.proceduralpainter
         private AnimBool editLayerSettingsAnim;
 
         private RenderTexture[] heatmaps;
-        
+
         private Vector2 scrollview;
 
         private int selectedLayerID
         {
-            get { return SessionState.GetInt("PTP_SELECTED_LAYER", -1); }
-            set { SessionState.SetInt("PTP_SELECTED_LAYER", value);}
+            get => SessionState.GetInt("PTP_SELECTED_LAYER", -1);
+            set => SessionState.SetInt("PTP_SELECTED_LAYER", value);
         }
+
         private int selectedModifierIndex;
-        ReorderableList m_LayerList;
+        private ReorderableList m_LayerList;
 
         private enum Tab
         {
             Layers,
             Settings
         }
-        
+
         private static Tab CurrentTab
         {
-            get { return (Tab)SessionState.GetInt("PTP_TAB", 0); }
-            set { SessionState.SetInt("PTP_TAB", (int)value); }
+            get => (Tab)SessionState.GetInt("PTP_TAB", 0);
+            set => SessionState.SetInt("PTP_TAB", (int)value);
         }
 
-        TerrainLayer m_PickedLayer;
-        Texture2D m_PickedTexture;
-        Texture2D m_layerTexture;
-        
-        int m_layerPickerWindowID = -1;
-        int m_texturePickerWindowID = -1;
+        private TerrainLayer m_PickedLayer;
+        private Texture2D m_PickedTexture;
+        private Texture2D m_layerTexture;
+
+        private int m_layerPickerWindowID = -1;
+        private int m_texturePickerWindowID = -1;
 
         // layer list view
-        const int kElementHeight = 40;
-        const int kElementObjectFieldHeight = 16;
-        const int kElementPadding = 2;
-        const int kElementObjectFieldWidth = 140;
-        const int kElementToggleWidth = 20;
-        const int kElementThumbSize = 40;
+        private const int kElementHeight = 40;
+        private const int kElementObjectFieldHeight = 16;
+        private const int kElementPadding = 2;
+        private const int kElementObjectFieldWidth = 140;
+        private const int kElementToggleWidth = 20;
+        private const int kElementThumbSize = 40;
 
         private string iconPrefix => EditorGUIUtility.isProSkin ? "d_" : "";
-        
+
         private void OnEnable()
         {
-            script = (TerrainPainter) target;
+            script = (TerrainPainter)target;
             TerrainPainter.Current = script;
-            
-            if(script.terrains != null) script.RecalculateBounds();
+
+            if (script.terrains != null) script.RecalculateBounds();
 
             terrains = serializedObject.FindProperty("terrains");
             autoRepaint = serializedObject.FindProperty("autoRepaint");
@@ -122,10 +126,10 @@ namespace sc.terrain.proceduralpainter
             RefreshModifierLists();
 
             editLayerSettingsAnim = new AnimBool(editLayerSettings);
-            editLayerSettingsAnim.valueChanged.AddListener(this.Repaint);
+            editLayerSettingsAnim.valueChanged.AddListener(Repaint);
             editLayerSettingsAnim.speed = 4f;
 
-            if(script.terrains != null) hasMissingTerrains = Utilities.HasMissingTerrain(script.terrains);
+            if (script.terrains != null) hasMissingTerrains = Utilities.HasMissingTerrain(script.terrains);
 
 #if UNITY_2019_1_OR_NEWER
             SceneView.duringSceneGui += OnSceneRepaint;
@@ -137,7 +141,7 @@ namespace sc.terrain.proceduralpainter
         private void RefreshLayerList()
         {
             m_LayerList = null;
-            
+
             if (m_LayerList == null)
             {
                 m_LayerList = new ReorderableList(script.layerSettings, typeof(LayerSettings), true,
@@ -150,23 +154,23 @@ namespace sc.terrain.proceduralpainter
                 m_LayerList.onReorderCallbackWithDetails = OnReorderLayerElement;
                 //m_LayerList.onAddDropdownCallback = OnLayerAddButton;
                 //m_LayerList.onRemoveCallback = OnLayerRemoveButton;
-                    
+
                 m_LayerList.headerHeight = 0f;
                 m_LayerList.footerHeight = 0f;
 
                 m_LayerList.index = selectedLayerID;
             }
-                
+
             m_LayerList.showDefaultBackground = false;
         }
 
         private void RefreshModifierLists()
         {
             m_modifierList.Clear();
-            
-            foreach (LayerSettings s in script.layerSettings)
+
+            foreach (var s in script.layerSettings)
             {
-                ReorderableList layerModifiers = new ReorderableList(s.modifierStack, typeof(Modifier));
+                var layerModifiers = new ReorderableList(s.modifierStack, typeof(Modifier));
                 layerModifiers.draggable = true;
                 layerModifiers.elementHeight = 25;
                 layerModifiers.drawHeaderCallback = DrawModifierHeader;
@@ -189,31 +193,31 @@ namespace sc.terrain.proceduralpainter
 #else
             SceneView.onSceneGUIDelegate -= OnSceneRepaint;
 #endif
-            
+
             //This function copies the GPU splatmaps to the terrain data's internal float arrays.
             //It is normally called when saving the project. But there's the risk of the terrains in the queue no longer being present in the scene, thus throwing null-refs.
             PaintContext.ApplyDelayedActions();
-            
+
             script.Dispose();
         }
-        
+
         public override void OnInspectorGUI()
         {
             EditorGUILayout.LabelField("Version " + TerrainPainter.Version, EditorStyles.centeredGreyMiniLabel);
             GUILayout.Space(5f);
-            
+
             //Terrains not yet assigned? Force settings tab
             if (terrains.arraySize > 0 && !hasMissingTerrains)
             {
                 CurrentTab = (Tab)GUILayout.Toolbar((int)CurrentTab, new GUIContent[]
                 {
 #if UNITY_2019_3_OR_NEWER
-                    new GUIContent("Layers", EditorGUIUtility.IconContent(iconPrefix + "Terrain Icon").image),
+                    new("Layers", EditorGUIUtility.IconContent(iconPrefix + "Terrain Icon").image),
 #else
                     //Old UI does not have a dark skin version for the terrain icon
                     new GUIContent("Layers", EditorGUIUtility.IconContent("Terrain Icon").image),
 #endif
-                    new GUIContent("Settings", EditorGUIUtility.IconContent(iconPrefix + "SettingsIcon").image)
+                    new("Settings", EditorGUIUtility.IconContent(iconPrefix + "SettingsIcon").image)
                 }, GUILayout.Height(30f));
 
                 instancedTerrains = script.terrains[0] && script.terrains[0].drawInstanced;
@@ -225,14 +229,14 @@ namespace sc.terrain.proceduralpainter
 
             //Default
             requiresRepaint = false;
-            #if __MICROSPLAT__
+#if __MICROSPLAT__
             requiresConfigRebuild = false;
-            #endif
-            
-            if(hasMissingTerrains) EditorGUILayout.HelpBox("One or more terrains are missing", MessageType.Error);
-            
+#endif
+
+            if (hasMissingTerrains) EditorGUILayout.HelpBox("One or more terrains are missing", MessageType.Error);
+
             serializedObject.Update();
-            
+
             EditorGUI.BeginChangeCheck();
 
             switch (CurrentTab)
@@ -245,44 +249,39 @@ namespace sc.terrain.proceduralpainter
                     break;
             }
 
-            if (EditorGUI.EndChangeCheck())
-            {
-                serializedObject.ApplyModifiedProperties();
-            }
-            
-            #if __MICROSPLAT__
+            if (EditorGUI.EndChangeCheck()) serializedObject.ApplyModifiedProperties();
+
+#if __MICROSPLAT__
             if(requiresConfigRebuild && script.msTexArray) TextureArrayConfigEditor.CompileConfig(script.msTexArray);
-            #endif
+#endif
 
             EditorGUILayout.Space();
-            
+
             using (new EditorGUILayout.HorizontalScope())
             {
-                GUILayout.FlexibleSpace();   
-                if(GUILayout.Button(new GUIContent(" Force Repaint ", "Trigger a complete repaint operation." +
-                                                                      "\n\nTypically needed if the terrain was modified externally in some way, yet no changes were made in the Terrain Painter component")))
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button(new GUIContent(" Force Repaint ", "Trigger a complete repaint operation." +
+                                                                       "\n\nTypically needed if the terrain was modified externally in some way, yet no changes were made in the Terrain Painter component")))
                 {
                     requiresRepaint = true;
                     EditorApplication.Beep();
                 }
+
                 GUILayout.FlexibleSpace();
             }
-            
+
             if (requiresRepaint)
             {
                 script.RepaintAll();
                 UpdateHeatmap();
             }
-            
+
             EditorGUILayout.LabelField("- Staggart Creations -", EditorStyles.centeredGreyMiniLabel);
         }
 
         private void DrawSettings()
         {
-            if (terrains.arraySize == 0 || hasMissingTerrains)
-            {
-                terrains.isExpanded = true;
-            }
+            if (terrains.arraySize == 0 || hasMissingTerrains) terrains.isExpanded = true;
 
             using (new EditorGUILayout.VerticalScope("Box"))
             {
@@ -290,7 +289,7 @@ namespace sc.terrain.proceduralpainter
                 EditorGUI.BeginChangeCheck();
                 EditorGUILayout.PropertyField(terrains, new GUIContent("Terrains (" + terrains.arraySize + ")"));
                 if (EditorGUI.EndChangeCheck()) serializedObject.ApplyModifiedProperties();
-                    
+
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     GUILayout.FlexibleSpace();
@@ -298,43 +297,42 @@ namespace sc.terrain.proceduralpainter
                     if (GUILayout.Button("Assign active terrains"))
                     {
                         //Important! Don't repaint if the terrains are new, current splatmaps would be wiped without user warning!
-                        if(terrains.arraySize > 0) requiresRepaint = true;
-                        
+                        if (terrains.arraySize > 0) requiresRepaint = true;
+
                         script.SetTargetTerrains(Terrain.activeTerrains);
 
                         hasMissingTerrains = false;
-                        
+
                         EditorUtility.SetDirty(target);
                     }
+
                     EditorGUI.BeginDisabledGroup(script.transform.childCount == 0);
                     if (GUILayout.Button("Assign child terrains"))
                     {
                         //Important! Don't repaint if the terrains are new, current splatmaps would be wiped without user warning!
-                        if(terrains.arraySize > 0) requiresRepaint = true;
-                        
+                        if (terrains.arraySize > 0) requiresRepaint = true;
+
                         script.SetTargetTerrains(script.GetComponentsInChildren<Terrain>());
 
                         hasMissingTerrains = false;
-                        
+
                         EditorUtility.SetDirty(target);
-                        
                     }
+
                     EditorGUI.EndDisabledGroup();
 
                     if (terrains.arraySize > 0)
-                    {
                         if (GUILayout.Button("Clear"))
                         {
                             script.terrains = new Terrain[0];
 
                             hasMissingTerrains = false;
-                            
+
                             EditorUtility.SetDirty(target);
                         }
-                    }
                 }
             }
-            
+
             if (terrains.arraySize == 0)
             {
                 EditorGUILayout.HelpBox("Assign terrains to paint on first", MessageType.Info);
@@ -342,43 +340,40 @@ namespace sc.terrain.proceduralpainter
             else
             {
                 EditorGUILayout.Space();
-                
+
                 serializedObject.Update();
 
                 EditorGUI.BeginChangeCheck();
-                
+
                 EditorGUILayout.PropertyField(autoRepaint);
                 if (EditorGUI.EndChangeCheck())
                 {
                     serializedObject.ApplyModifiedProperties();
                     script.SetAutoRepaint(autoRepaint.boolValue);
                 }
-                
+
                 EditorGUI.BeginChangeCheck();
-                
+
                 EditorGUILayout.PropertyField(resolution);
                 EditorGUILayout.PropertyField(colorMapResolution);
-                if (EditorGUI.EndChangeCheck())
-                {
-                    requiresRepaint = true;
-                }
+                if (EditorGUI.EndChangeCheck()) requiresRepaint = true;
 
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     EditorGUILayout.PrefixLabel("Bounds");
 
                     if (GUILayout.Button(new GUIContent("Recalculate bounds",
-                            "If the terrain size has changed, the bounds must be recalculated. The white box must encapsulate all terrains"),
-                        GUILayout.MaxWidth(150f)))
+                                "If the terrain size has changed, the bounds must be recalculated. The white box must encapsulate all terrains"),
+                            GUILayout.MaxWidth(150f)))
                     {
                         script.RecalculateBounds();
                         requiresRepaint = true;
                         EditorUtility.SetDirty(target);
                     }
                 }
-                
+
                 EditorGUILayout.Space();
-                
+
 #if VEGETATION_STUDIO_PRO
                 EditorGUILayout.LabelField("Vegetation Studio Pro", EditorStyles.boldLabel);
                 EditorGUILayout.PropertyField(refreshVegetationOnPaint);
@@ -390,47 +385,41 @@ namespace sc.terrain.proceduralpainter
         private void OnSceneRepaint(SceneView sceneView)
         {
             if (layerSettings.arraySize != 0 && terrains.arraySize != 0) //Not yet initialized OnEnable
-            {
                 if (heatmapEnabled && selectedLayerID >= 0)
                 {
                     if (heatmaps == null || script.terrains.Length != heatmaps.Length) UpdateHeatmap();
 
-                    for (int i = 0; i < script.terrains.Length; i++)
-                    {
-                        HeatmapPreview.Draw(script.terrains[i], script.layerSettings[m_LayerList.index].layer, heatmaps[i], visualizeContour, visualizeTiling);
-                    }
+                    for (var i = 0; i < script.terrains.Length; i++)
+                        HeatmapPreview.Draw(script.terrains[i], script.layerSettings[m_LayerList.index].layer,
+                            heatmaps[i], visualizeContour, visualizeTiling);
                 }
-            }
 
             if (!heatmapEnabled && heatmaps != null)
             {
-                for (int i = 0; i < heatmaps.Length; i++)
-                {
-                    DestroyImmediate(heatmaps[i]);
-                }
+                for (var i = 0; i < heatmaps.Length; i++) DestroyImmediate(heatmaps[i]);
 
                 heatmaps = null;
             }
 
-            if (CurrentTab == Tab.Settings)
-            {
-                Handles.DrawWireCube(script.bounds.center, script.bounds.size);
-            }
+            if (CurrentTab == Tab.Settings) Handles.DrawWireCube(script.bounds.center, script.bounds.size);
         }
 
         private void UpdateHeatmap()
         {
-            if(heatmapEnabled) HeatmapPreview.CreateHeatmaps(script.terrains, (m_LayerList.count-1) - selectedLayerID, ref heatmaps);
+            if (heatmapEnabled)
+                HeatmapPreview.CreateHeatmaps(script.terrains, m_LayerList.count - 1 - selectedLayerID, ref heatmaps);
         }
-        
+
         #region Layers
-        private float previewScaleMultiplier 
+
+        private float previewScaleMultiplier
         {
             get => EditorPrefs.GetFloat("PTP_UI_LAYER_COUNT", 4f);
             set => EditorPrefs.SetFloat("PTP_UI_LAYER_COUNT", value);
         }
+
         private Rect sliderRect;
-        
+
         private void DrawLayers()
         {
 #if __MICROSPLAT__
@@ -440,15 +429,16 @@ namespace sc.terrain.proceduralpainter
 #endif
 
             sliderRect = EditorGUILayout.GetControlRect();
-            sliderRect.x += (EditorGUIUtility.currentViewWidth * 0.725f);
+            sliderRect.x += EditorGUIUtility.currentViewWidth * 0.725f;
             sliderRect.width *= 0.2f;
-            
+
             previewScaleMultiplier = GUI.HorizontalSlider(sliderRect, previewScaleMultiplier, 4f, 16);
-            
-            scrollview = EditorGUILayout.BeginScrollView(scrollview, EditorStyles.textArea, GUILayout.Height((kElementHeight * previewScaleMultiplier) + 20f));
+
+            scrollview = EditorGUILayout.BeginScrollView(scrollview, EditorStyles.textArea,
+                GUILayout.Height(kElementHeight * previewScaleMultiplier + 20f));
 
             m_LayerList.DoLayoutList();
-            
+
             EditorGUILayout.EndScrollView();
 
             // Control buttons
@@ -456,7 +446,10 @@ namespace sc.terrain.proceduralpainter
             {
                 EditorGUI.BeginDisabledGroup(m_LayerList.index < 0 || m_LayerList.count == 0);
                 {
-                    heatmapEnabled = GUILayout.Toggle(heatmapEnabled, new GUIContent("  Heatmap", EditorGUIUtility.IconContent(iconPrefix + "winbtn_mac_close").image), EditorStyles.toolbarButton, GUILayout.MaxWidth(110f));
+                    heatmapEnabled = GUILayout.Toggle(heatmapEnabled,
+                        new GUIContent("  Heatmap",
+                            EditorGUIUtility.IconContent(iconPrefix + "winbtn_mac_close").image),
+                        EditorStyles.toolbarButton, GUILayout.MaxWidth(110f));
                     if (heatmapEnabled)
                     {
                         EditorGUILayout.LabelField("Countour", GUILayout.MaxWidth(60f));
@@ -464,49 +457,55 @@ namespace sc.terrain.proceduralpainter
                         EditorGUILayout.LabelField("Tiling", GUILayout.MaxWidth(35f));
                         visualizeTiling = EditorGUILayout.Toggle(visualizeTiling, GUILayout.MaxWidth(30f));
                     }
-                        
-                    editLayerSettings = GUILayout.Toggle(editLayerSettings, new GUIContent("  Edit layer", EditorGUIUtility.IconContent(iconPrefix + "editicon.sml").image), EditorStyles.toolbarButton, GUILayout.MaxWidth(90f));
+
+                    editLayerSettings = GUILayout.Toggle(editLayerSettings,
+                        new GUIContent("  Edit layer", EditorGUIUtility.IconContent(iconPrefix + "editicon.sml").image),
+                        EditorStyles.toolbarButton, GUILayout.MaxWidth(90f));
                 }
                 EditorGUI.EndDisabledGroup();
 
-                
+
                 GUILayout.FlexibleSpace();
 
-                EditorGUI.BeginDisabledGroup(layerSettings.arraySize >= 32); //Maximum realistic number of terrain layers
+                EditorGUI.BeginDisabledGroup(layerSettings.arraySize >=
+                                             32); //Maximum realistic number of terrain layers
 #if UNITY_2019_3_OR_NEWER
                 var newIcon = EditorGUIUtility.IconContent(iconPrefix + "DefaultAsset Icon").image;
 #else
                 var newIcon = EditorGUIUtility.IconContent("DefaultAsset Icon").image;
 #endif
-                if (GUILayout.Button(new GUIContent("", newIcon, "New terrain layer from texture"), EditorStyles.toolbarButton, GUILayout.MaxWidth(32f)))
+                if (GUILayout.Button(new GUIContent("", newIcon, "New terrain layer from texture"),
+                        EditorStyles.toolbarButton, GUILayout.MaxWidth(32f)))
                 {
-                    m_texturePickerWindowID = EditorGUIUtility.GetControlID(FocusType.Passive) + 201; 
+                    m_texturePickerWindowID = GUIUtility.GetControlID(FocusType.Passive) + 201;
                     EditorGUIUtility.ShowObjectPicker<Texture2D>(null, false, "", m_texturePickerWindowID);
                 }
-                
+
                 if (GUILayout.Button(new GUIContent("",
-                    EditorGUIUtility.IconContent(iconPrefix + "Toolbar Plus More")
-                        .image, "Add terrain layer from project"), EditorStyles.toolbarButton))
+                        EditorGUIUtility.IconContent(iconPrefix + "Toolbar Plus More")
+                            .image, "Add terrain layer from project"), EditorStyles.toolbarButton))
                 {
-                    m_layerPickerWindowID = EditorGUIUtility.GetControlID(FocusType.Passive) + 200; 
+                    m_layerPickerWindowID = GUIUtility.GetControlID(FocusType.Passive) + 200;
                     EditorGUIUtility.ShowObjectPicker<TerrainLayer>(null, false, "", m_layerPickerWindowID);
                 }
 
                 EditorGUI.EndDisabledGroup();
 
                 EditorGUI.BeginDisabledGroup(m_LayerList.index < 0 || m_LayerList.count == 0);
-                if (GUILayout.Button(new GUIContent("", EditorGUIUtility.IconContent(iconPrefix + "TreeEditor.Trash").image,
-                    "Remove selected layer"), EditorStyles.toolbarButton))
+                if (GUILayout.Button(new GUIContent("",
+                        EditorGUIUtility.IconContent(iconPrefix + "TreeEditor.Trash").image,
+                        "Remove selected layer"), EditorStyles.toolbarButton))
                 {
                     if (!EditorUtility.DisplayDialog("Terrain Painter",
-                        "Removing a layer cannot be undone, settings will be lost",
-                        "Ok","Cancel")) return;
-                    
+                            "Removing a layer cannot be undone, settings will be lost",
+                            "Ok", "Cancel")) return;
+
                     RemoveLayerElement(m_LayerList.index);
                 }
+
                 EditorGUI.EndDisabledGroup();
             }
-            
+
             if (script.layerSettings.ElementAtOrDefault(selectedLayerID) != null)
             {
                 editLayerSettingsAnim.target = editLayerSettings;
@@ -517,26 +516,30 @@ namespace sc.terrain.proceduralpainter
                     EditorGUILayout.LabelField("Layer settings", EditorStyles.boldLabel);
 
 #if UNITY_2019_2_OR_NEWER
-                    Editor.CreateCachedEditor(script.layerSettings.ElementAtOrDefault(selectedLayerID).layer, typeof(TerrainLayerInspector), ref layerEditor);
+                    CreateCachedEditor(script.layerSettings.ElementAtOrDefault(selectedLayerID).layer,
+                        typeof(TerrainLayerInspector), ref layerEditor);
 #else
                     //TerrainLayerInspector is internal
                     layerEditor = Editor.CreateEditor(script.layerSettings.ElementAtOrDefault(selectedLayerID).layer);
 #endif
                     layerEditor.OnInspectorGUI();
                 }
+
                 EditorGUILayout.EndFadeGroup();
             }
 
             if (m_LayerList.count == 0)
             {
                 EditorGUILayout.Space();
-                EditorGUILayout.HelpBox("All existing terrain layers and painting will be cleared when adding the first layer!", MessageType.Warning);
+                EditorGUILayout.HelpBox(
+                    "All existing terrain layers and painting will be cleared when adding the first layer!",
+                    MessageType.Warning);
             }
 
             ObjectPickerActions();
-            
+
             GUILayout.Space(17f);
-            
+
             DrawLayerModifierStack();
         }
 
@@ -569,25 +572,23 @@ namespace sc.terrain.proceduralpainter
             }
 #endif
         }
-        
+
         private void ObjectPickerActions()
         {
             // Add existing layer
             if (Event.current.commandName == "ObjectSelectorClosed" &&
                 EditorGUIUtility.GetObjectPickerControlID() == m_layerPickerWindowID)
             {
-                m_PickedLayer = (TerrainLayer) EditorGUIUtility.GetObjectPickerObject();
+                m_PickedLayer = (TerrainLayer)EditorGUIUtility.GetObjectPickerObject();
                 m_layerPickerWindowID = -1;
 
                 if (m_PickedLayer)
                 {
-
                     var exists = false;
 
-                    foreach (LayerSettings s in script.layerSettings)
-                    {
-                        if (s.layer == m_PickedLayer) exists = true;
-                    }
+                    foreach (var s in script.layerSettings)
+                        if (s.layer == m_PickedLayer)
+                            exists = true;
 
                     if (exists)
                     {
@@ -595,41 +596,41 @@ namespace sc.terrain.proceduralpainter
                         return;
                     }
                 }
-                
+
                 script.CreateSettingsForLayer(m_PickedLayer);
-                
+
                 MicroSplatAdd(m_PickedLayer);
-                
+
                 RefreshLayerList();
                 RefreshModifierLists();
-                
+
                 //Auto-select new layer
                 m_LayerList.index = 0;
                 m_LayerList.onSelectCallback.Invoke(m_LayerList);
                 scrollview.y = 0;
-                
+
                 EditorUtility.SetDirty(target);
 
                 requiresRepaint = true;
             }
-            
+
             // New layer creation
             if (Event.current.commandName == "ObjectSelectorClosed" &&
                 EditorGUIUtility.GetObjectPickerControlID() == m_texturePickerWindowID)
             {
-                m_PickedTexture = (Texture2D) EditorGUIUtility.GetObjectPickerObject();
+                m_PickedTexture = (Texture2D)EditorGUIUtility.GetObjectPickerObject();
                 m_texturePickerWindowID = -1;
 
                 if (m_PickedTexture == null) return;
 
-                TerrainLayer newLayer = CreateLayerFromTexture(m_PickedTexture);
+                var newLayer = CreateLayerFromTexture(m_PickedTexture);
 
                 if (newLayer == null) return;
-                
+
                 script.CreateSettingsForLayer(newLayer);
 
                 MicroSplatAdd(newLayer);
-                
+
                 RefreshLayerList();
                 RefreshModifierLists();
 
@@ -637,7 +638,7 @@ namespace sc.terrain.proceduralpainter
                 m_LayerList.index = 0;
                 m_LayerList.onSelectCallback.Invoke(m_LayerList);
                 scrollview.y = 0;
-                
+
                 EditorUtility.SetDirty(target);
 
                 requiresRepaint = true;
@@ -660,7 +661,7 @@ namespace sc.terrain.proceduralpainter
             }
 #endif
         }
-        
+
         private void MicroSplatAdd(TerrainLayer newLayer)
         {
 #if __MICROSPLAT__
@@ -691,24 +692,24 @@ namespace sc.terrain.proceduralpainter
 
         private TerrainLayer CreateLayerFromTexture(Texture2D tex)
         {
-            TerrainLayer newLayer = new TerrainLayer();
+            var newLayer = new TerrainLayer();
             newLayer.diffuseTexture = m_PickedTexture;
             newLayer.name = newLayer.diffuseTexture.name;
-                
-            string assetPath =string.Empty;
+
+            var assetPath = string.Empty;
             assetPath = EditorUtility.SaveFilePanel("Asset destination folder", "Assets/", "New Layer", "asset");
             if (assetPath.Length == 0) return null;
 
             //Relative path in project
             assetPath = assetPath.Substring(assetPath.IndexOf("Assets/"));
-                
+
             AssetDatabase.CreateAsset(newLayer, assetPath);
-                
+
             newLayer = (TerrainLayer)AssetDatabase.LoadAssetAtPath(assetPath, typeof(TerrainLayer));
 
             return newLayer;
         }
-        
+
         private void DrawLayerBackground(Rect rect, int index, bool isactive, bool selected)
         {
             var prevColor = GUI.color;
@@ -718,12 +719,13 @@ namespace sc.terrain.proceduralpainter
                 ? Color.grey * (EditorGUIUtility.isProSkin ? 1f : 1.7f)
                 : Color.grey * (EditorGUIUtility.isProSkin ? 1.05f : 1.66f);
 
-            if (m_LayerList.index == index) GUI.color = EditorGUIUtility.isProSkin ? Color.grey * 1.1f : Color.grey * 1.5f;
+            if (m_LayerList.index == index)
+                GUI.color = EditorGUIUtility.isProSkin ? Color.grey * 1.1f : Color.grey * 1.5f;
 
             //Selection outline
             if (m_LayerList.index == index)
             {
-                Rect outline = rect;
+                var outline = rect;
                 EditorGUI.DrawRect(outline, EditorGUIUtility.isProSkin ? Color.gray * 1.5f : Color.gray);
 
                 rect.x += 1;
@@ -738,21 +740,26 @@ namespace sc.terrain.proceduralpainter
             GUI.backgroundColor = prevBgColor;
         }
 
-        void DrawLayerElement(Rect rect, int index, bool selected, bool focused)
+        private void DrawLayerElement(Rect rect, int index, bool selected, bool focused)
         {
             rect.y = rect.y + kElementPadding;
-            var rectButton = new Rect((rect.x + kElementPadding), rect.y + (kElementHeight / 4), kElementToggleWidth,
+            var rectButton = new Rect(rect.x + kElementPadding, rect.y + kElementHeight / 4, kElementToggleWidth,
                 kElementToggleWidth);
-            var rectImage = new Rect((rectButton.x + kElementToggleWidth) + 5f, rect.y, kElementThumbSize, kElementThumbSize);
-            var rectObject = new Rect((rectImage.x + kElementThumbSize + 10), rect.y + (kElementHeight / 4),
+            var rectImage = new Rect(rectButton.x + kElementToggleWidth + 5f, rect.y, kElementThumbSize,
+                kElementThumbSize);
+            var rectObject = new Rect(rectImage.x + kElementThumbSize + 10, rect.y + kElementHeight / 4,
                 kElementObjectFieldWidth, kElementObjectFieldHeight);
-            
+
             if (script.layerSettings.Count > 0 && script.layerSettings.ElementAtOrDefault(index) != null)
             {
-                if (index < layerSettings.arraySize-1)
+                if (index < layerSettings.arraySize - 1)
                 {
 #if UNITY_2019_1_OR_NEWER
-                    EditorGUI.Toggle(rectButton, new GUIContent(EditorGUIUtility.IconContent(script.layerSettings[index].enabled ? iconPrefix + "scenevis_visible_hover" : iconPrefix + "scenevis_hidden_hover").image), script.layerSettings[index].enabled, GUIStyle.none);
+                    EditorGUI.Toggle(rectButton,
+                        new GUIContent(EditorGUIUtility.IconContent(script.layerSettings[index].enabled
+                            ? iconPrefix + "scenevis_visible_hover"
+                            : iconPrefix + "scenevis_hidden_hover").image), script.layerSettings[index].enabled,
+                        GUIStyle.none);
                     if (rectButton.Contains(Event.current.mousePosition) && Event.current.type == EventType.MouseDown &&
                         Event.current.button == 0)
                     {
@@ -763,7 +770,8 @@ namespace sc.terrain.proceduralpainter
 
 #else
                     EditorGUI.BeginChangeCheck();
-                    script.layerSettings[index].enabled = EditorGUI.Toggle(rectButton, script.layerSettings[index].enabled);
+                    script.layerSettings[index].enabled =
+ EditorGUI.Toggle(rectButton, script.layerSettings[index].enabled);
                     if (EditorGUI.EndChangeCheck()) requiresRepaint = true;
 #endif
                 }
@@ -772,43 +780,40 @@ namespace sc.terrain.proceduralpainter
                     //Base layer is always enabled
                     script.layerSettings[index].enabled = true;
                 }
-                
+
                 Texture2D icon = null;
                 if (script.layerSettings[index].layer != null)
-                {
                     icon = AssetPreview.GetAssetPreview(script.layerSettings[index].layer.diffuseTexture);
-                }
                 GUI.Box(rectImage, icon);
-                
+
                 EditorGUI.BeginChangeCheck();
-                script.layerSettings[index].layer = EditorGUI.ObjectField(rectObject, script.layerSettings[index].layer, typeof(TerrainLayer), false) as TerrainLayer;
-                if (EditorGUI.EndChangeCheck())
-                {
-                    OnChangeLayer(script.layerSettings[index].layer, index);
-                }
+                script.layerSettings[index].layer =
+                    EditorGUI.ObjectField(rectObject, script.layerSettings[index].layer, typeof(TerrainLayer),
+                        false) as TerrainLayer;
+                if (EditorGUI.EndChangeCheck()) OnChangeLayer(script.layerSettings[index].layer, index);
             }
         }
 
-        void OnSelectLayerElement(ReorderableList list)
+        private void OnSelectLayerElement(ReorderableList list)
         {
             selectedLayerID = list.index;
-            
-            LayerSettings settings = script.layerSettings.ElementAtOrDefault(selectedLayerID);
+
+            var settings = script.layerSettings.ElementAtOrDefault(selectedLayerID);
             m_modifierList.TryGetValue(settings, out curModList);
 
             SelectModifier(curModList, 0);
-            
+
             //Refresh for current layer
             UpdateHeatmap();
         }
 
-        void OnChangeLayer(TerrainLayer terrainLayer, int index)
+        private void OnChangeLayer(TerrainLayer terrainLayer, int index)
         {
             requiresRepaint = true;
 
             script.SetTerrainLayers();
             RefreshLayerList();
-            
+
 #if __MICROSPLAT__
             if (script.msTexArray)
             {
@@ -827,13 +832,15 @@ namespace sc.terrain.proceduralpainter
 #endif
         }
 
-        void DrawLayerModifierStack()
+        private void DrawLayerModifierStack()
         {
             if (layerSettings.arraySize == 0) return;
-            
-            if (selectedLayerID == layerSettings.arraySize -1)
+
+            if (selectedLayerID == layerSettings.arraySize - 1)
             {
-                EditorGUILayout.HelpBox("Base layer has no configurable options, it fills the entire terrain." + (layerSettings.arraySize == 1 ? " \n\nAdd an additional terrain layer" : ""), MessageType.Info);
+                EditorGUILayout.HelpBox(
+                    "Base layer has no configurable options, it fills the entire terrain." +
+                    (layerSettings.arraySize == 1 ? " \n\nAdd an additional terrain layer" : ""), MessageType.Info);
                 return;
             }
 
@@ -842,70 +849,71 @@ namespace sc.terrain.proceduralpainter
                 EditorGUILayout.HelpBox("Select a layer to modify its spawn rules", MessageType.Info);
                 return;
             }
-            
-            LayerSettings settings = script.layerSettings.ElementAtOrDefault(selectedLayerID);
+
+            var settings = script.layerSettings.ElementAtOrDefault(selectedLayerID);
             m_modifierList.TryGetValue(settings, out curModList);
-            
+
             //Draw all modifierStack for the current layer
             using (new EditorGUI.DisabledGroupScope(settings.enabled == false))
             {
                 if (curModList != null)
                 {
                     curModList.DoLayoutList();
-                    
-                    if(curModList.index < 0 && curModList.count > 0) EditorGUILayout.HelpBox("Select a modifier from the stack to edit its settings", MessageType.Info);
-                    if(curModList.count == 0) EditorGUILayout.HelpBox("Add a modifier to create painting rules", MessageType.Info);
-                    
+
+                    if (curModList.index < 0 && curModList.count > 0)
+                        EditorGUILayout.HelpBox("Select a modifier from the stack to edit its settings",
+                            MessageType.Info);
+                    if (curModList.count == 0)
+                        EditorGUILayout.HelpBox("Add a modifier to create painting rules", MessageType.Info);
+
                     DrawModifierSettings(curModList.index);
                 }
             }
-            
         }
 
-        void OnReorderLayerElement(ReorderableList list, int oldIndex, int newIndex)
+        private void OnReorderLayerElement(ReorderableList list, int oldIndex, int newIndex)
         {
             script.SetTerrainLayers();
             RefreshLayerList();
-            
+
             requiresRepaint = true;
 
             UpdateHeatmap();
-            
-            #if __MICROSPLAT__
+
+#if __MICROSPLAT__
             if (script.msTexArray)
             {
-                MethodInfo SwapEntryInfo = typeof(TextureArrayConfigEditor).GetMethod("SwapEntry", BindingFlags.Instance | BindingFlags.NonPublic);
+                MethodInfo SwapEntryInfo =
+ typeof(TextureArrayConfigEditor).GetMethod("SwapEntry", BindingFlags.Instance | BindingFlags.NonPublic);
                 Editor.CreateCachedEditor(script.msTexArray, typeof(TextureArrayConfigEditor), ref msTexArrayEditor);
                 //Because layers are from bottom to top, reverse indices
                 SwapEntryInfo.Invoke(msTexArrayEditor, new object[] { script.msTexArray, (list.count-1) - oldIndex, (list.count-1) - newIndex });
 
                 requiresConfigRebuild = true;
             }
-            #endif
+#endif
         }
-        
-        void RemoveLayerElement(int index)
+
+        private void RemoveLayerElement(int index)
         {
-            if (script.layerSettings.ElementAtOrDefault(index) == null)
-            {
-                return;
-            }
+            if (script.layerSettings.ElementAtOrDefault(index) == null) return;
 
             script.layerSettings.RemoveAt(index);
 
             script.SetTerrainLayers();
             RefreshLayerList();
-            
+
             EditorUtility.SetDirty(target);
 
             requiresRepaint = true;
-            
+
             UpdateHeatmap();
-            
+
 #if __MICROSPLAT__
             if (script.msTexArray)
             {
-                MethodInfo RemoveInfo = typeof(TextureArrayConfigEditor).GetMethod("Remove", BindingFlags.Instance | BindingFlags.NonPublic);
+                MethodInfo RemoveInfo =
+ typeof(TextureArrayConfigEditor).GetMethod("Remove", BindingFlags.Instance | BindingFlags.NonPublic);
                 Editor.CreateCachedEditor(script.msTexArray, typeof(TextureArrayConfigEditor), ref msTexArrayEditor);
                 RemoveInfo.Invoke(msTexArrayEditor, new object[] { script.msTexArray, (script.layerSettings.Count) - index});
 
@@ -913,8 +921,9 @@ namespace sc.terrain.proceduralpainter
             }
 #endif
         }
+
         #endregion
-        
+
         #region Modifiers
 
         private void SelectModifier(ReorderableList list, int index)
@@ -924,17 +933,19 @@ namespace sc.terrain.proceduralpainter
             list.onSelectCallback.Invoke(curModList);
             //list.GrabKeyboardFocus();
         }
+
         private void OnRemoveModifier(ReorderableList list)
         {
-            if (!EditorUtility.DisplayDialog("Remove modifier", "This operation cannot be undone, settings will be lost",
-                "Ok", "Cancel")) return;
-            
+            if (!EditorUtility.DisplayDialog("Remove modifier",
+                    "This operation cannot be undone, settings will be lost",
+                    "Ok", "Cancel")) return;
+
             //get the related layer
-            LayerSettings layer = script.layerSettings.ElementAtOrDefault(selectedLayerID);
-            
+            var layer = script.layerSettings.ElementAtOrDefault(selectedLayerID);
+
             layer.modifierStack.RemoveAt(list.index);
             RefreshModifierLists();
-            
+
             EditorUtility.SetDirty(target);
 
             requiresRepaint = true;
@@ -947,29 +958,27 @@ namespace sc.terrain.proceduralpainter
 
         private void OnAddModifierDropDown(Rect buttonrect, ReorderableList list)
         {
-            List<Modifier> currentModifierList = script.layerSettings.ElementAtOrDefault(selectedLayerID).modifierStack;
-            
-            GenericMenu menu = new GenericMenu();
+            var currentModifierList = script.layerSettings.ElementAtOrDefault(selectedLayerID).modifierStack;
 
-            foreach (string item in ModifierEditor.ModifierNames)
-            {
+            var menu = new GenericMenu();
+
+            foreach (var item in ModifierEditor.ModifierNames)
                 menu.AddItem(new GUIContent(item), false, () => AddModifier(currentModifierList, list, item));
-            }
-                        
+
             menu.ShowAsContext();
         }
-        
+
         private void AddModifier(List<Modifier> currentModifierList, ReorderableList list, string typeName)
         {
-            Type type = ModifierEditor.GetType(typeName);
-            
-            Modifier m = (Modifier)CreateInstance(type);
+            var type = ModifierEditor.GetType(typeName);
+
+            var m = (Modifier)CreateInstance(type);
             m.label = typeName;
             currentModifierList.Insert(0, m);
-            
+
             RefreshModifierLists();
-            
-            LayerSettings settings = script.layerSettings.ElementAtOrDefault(selectedLayerID);
+
+            var settings = script.layerSettings.ElementAtOrDefault(selectedLayerID);
             m_modifierList.TryGetValue(settings, out curModList);
             //Auto select new
             SelectModifier(curModList, 0);
@@ -978,9 +987,9 @@ namespace sc.terrain.proceduralpainter
 
             EditorUtility.SetDirty(target);
         }
-        
 
-        void OnSelectModifier(ReorderableList list)
+
+        private void OnSelectModifier(ReorderableList list)
         {
             selectedModifierIndex = list.index;
         }
@@ -994,12 +1003,12 @@ namespace sc.terrain.proceduralpainter
                 ? Color.grey * (EditorGUIUtility.isProSkin ? 1f : 1.7f)
                 : Color.grey * (EditorGUIUtility.isProSkin ? 1.05f : 1.66f);
 
-            
+
             //Selection outline (note: can't rely on isfocused. Focus and selection aren't the same thing)
             if (index == selectedModifierIndex)
             {
                 GUI.color = EditorGUIUtility.isProSkin ? Color.grey * 1.1f : Color.grey * 1.5f;
-                Rect outline = rect;
+                var outline = rect;
                 EditorGUI.DrawRect(outline, EditorGUIUtility.isProSkin ? Color.gray * 1.5f : Color.gray);
 
                 rect.x += 1;
@@ -1007,7 +1016,7 @@ namespace sc.terrain.proceduralpainter
                 rect.width -= 2;
                 rect.height -= 2;
             }
-            
+
 
             EditorGUI.DrawRect(rect, GUI.color);
 
@@ -1018,28 +1027,33 @@ namespace sc.terrain.proceduralpainter
         private void DrawModifierElement(Rect rect, int index, bool isactive, bool isfocused)
         {
             //Get modifierStack for current layer
-            List<Modifier> currentModifierList = script.layerSettings.ElementAtOrDefault(m_LayerList.index).modifierStack;
-            
+            var currentModifierList = script.layerSettings.ElementAtOrDefault(m_LayerList.index).modifierStack;
+
             if (currentModifierList.ElementAtOrDefault(index) == null)
             {
                 EditorGUILayout.LabelField("NULL!");
                 return;
             }
-            
-            Modifier m = currentModifierList[index];
-            
+
+            var m = currentModifierList[index];
+
             rect.y = rect.y;
             var rectButton = new Rect(10 + (rect.x + kElementPadding), rect.y + kElementPadding, kElementToggleWidth,
                 kElementToggleWidth);
-            var labelRect = new Rect(rect.x + rectButton.x - 10, rect.y+kElementPadding, 120, 17);
-            var blendModeRect = new Rect((labelRect.x + 120 + 10), rect.y+ kElementPadding, 80, 27);
-            var opacityRect = new Rect(blendModeRect.x + blendModeRect.width + kElementPadding + 10, rect.y+ kElementPadding, 0f, 17);
+            var labelRect = new Rect(rect.x + rectButton.x - 10, rect.y + kElementPadding, 120, 17);
+            var blendModeRect = new Rect(labelRect.x + 120 + 10, rect.y + kElementPadding, 80, 27);
+            var opacityRect = new Rect(blendModeRect.x + blendModeRect.width + kElementPadding + 10,
+                rect.y + kElementPadding, 0f, 17);
             opacityRect.width = EditorGUIUtility.currentViewWidth - opacityRect.x - 30f;
-            
+
             m.label = EditorGUI.TextField(labelRect, m.label);
-            
+
 #if UNITY_2019_1_OR_NEWER
-            EditorGUI.Toggle(rectButton, new GUIContent(EditorGUIUtility.IconContent(m.enabled ? iconPrefix +  "scenevis_visible_hover" : iconPrefix + "scenevis_hidden_hover").image, "Toggle visibility"), m.enabled, GUIStyle.none);
+            EditorGUI.Toggle(rectButton,
+                new GUIContent(
+                    EditorGUIUtility.IconContent(m.enabled
+                        ? iconPrefix + "scenevis_visible_hover"
+                        : iconPrefix + "scenevis_hidden_hover").image, "Toggle visibility"), m.enabled, GUIStyle.none);
             if (rectButton.Contains(Event.current.mousePosition) && Event.current.type == EventType.MouseDown &&
                 Event.current.button == 0)
             {
@@ -1055,47 +1069,47 @@ namespace sc.terrain.proceduralpainter
                 requiresRepaint = true;
             }
 #endif
-            
+
             serializedObject.Update();
 
             EditorGUI.BeginChangeCheck();
-            
-            m.blendMode =  (Modifier.BlendMode) EditorGUI.Popup(blendModeRect, (int)m.blendMode, Enum.GetNames((typeof(Modifier.BlendMode))));
+
+            m.blendMode = (Modifier.BlendMode)EditorGUI.Popup(blendModeRect, (int)m.blendMode,
+                Enum.GetNames(typeof(Modifier.BlendMode)));
             m.opacity = EditorGUI.Slider(opacityRect, m.opacity, 0f, 100f);
 
-            if (EditorGUI.EndChangeCheck())
-            {
-                requiresRepaint = true;
-            }
+            if (EditorGUI.EndChangeCheck()) requiresRepaint = true;
         }
 
         private void DrawModifierSettings(int index)
         {
             //None selected
             if (index < 0) return;
-            
+
             serializedObject.Update();
-            
-            SerializedProperty settingsElement = serializedObject.FindProperty("layerSettings").GetArrayElementAtIndex(m_LayerList.index);
-            SerializedProperty modifiersElement = settingsElement.FindPropertyRelative("modifierStack");
+
+            var settingsElement =
+                serializedObject.FindProperty("layerSettings").GetArrayElementAtIndex(m_LayerList.index);
+            var modifiersElement = settingsElement.FindPropertyRelative("modifierStack");
             if (index >= modifiersElement.arraySize) return;
-            SerializedProperty modifierProp = modifiersElement.GetArrayElementAtIndex(index);
-            
+            var modifierProp = modifiersElement.GetArrayElementAtIndex(index);
+
             //Can't draw the properties of the serializedproperty itself
-            var editor = Editor.CreateEditor(modifierProp.objectReferenceValue);
-            
-            if (instancedTerrains == false && (modifierProp.objectReferenceValue.GetType() == typeof(Curvature) || modifierProp.objectReferenceValue.GetType() == typeof(Direction)))
+            var editor = CreateEditor(modifierProp.objectReferenceValue);
+
+            if (instancedTerrains == false && (modifierProp.objectReferenceValue.GetType() == typeof(Curvature) ||
+                                               modifierProp.objectReferenceValue.GetType() == typeof(Direction)))
             {
                 EditorGUILayout.HelpBox("\nInstanced rendering is disabled on the terrain(s)." +
                                         "\n\nThis modifier will have no effect\n", MessageType.Error);
-                
+
                 GUILayout.Space(-48);
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     GUILayout.FlexibleSpace();
                     if (GUILayout.Button(new GUIContent("Enable"), GUILayout.Width(60)))
                     {
-                        foreach (Terrain terrain in script.terrains)
+                        foreach (var terrain in script.terrains)
                         {
                             terrain.drawInstanced = true;
                             EditorUtility.SetDirty(terrain);
@@ -1103,34 +1117,34 @@ namespace sc.terrain.proceduralpainter
 
                         requiresRepaint = true;
                     }
+
                     GUILayout.Space(8);
                 }
+
                 GUILayout.Space(32);
             }
-            
+
             EditorGUI.BeginChangeCheck();
-            
-            #if ODIN_INSPECTOR
+
+#if ODIN_INSPECTOR
             editor.DrawDefaultInspector();
-            #else
+#else
             //If Odin is installed, this doesn't draw!
             editor.OnInspectorGUI();
-            #endif
+#endif
 
-            if (EditorGUI.EndChangeCheck())
-            {
-                requiresRepaint = true;
-            }
+            if (EditorGUI.EndChangeCheck()) requiresRepaint = true;
         }
-        
-        void OnReorderModifier(ReorderableList list, int oldIndex, int newIndex)
+
+        private void OnReorderModifier(ReorderableList list, int oldIndex, int newIndex)
         {
             RefreshModifierLists();
-            
+
             UpdateHeatmap();
-            
+
             requiresRepaint = true;
         }
-#endregion
+
+        #endregion
     }
 }

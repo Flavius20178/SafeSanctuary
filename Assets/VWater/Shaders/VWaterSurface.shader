@@ -29,10 +29,10 @@
         [Toggle(REFRACTION_DEPTH_CORRECTION)]
         _RefractionDepthCorrection ("Refraction Depth Correction", Float) = 1
 
-		[Toggle(WIND_MAP)]
+        [Toggle(WIND_MAP)]
         _WindEnabled ("Wind Map Enabled", Float) = 0
-		_WindMap ("Wind Map", 2D) = "white" {}
-        
+        _WindMap ("Wind Map", 2D) = "white" {}
+
         [NoScaleOffset] _WaveBuffer("Water Buffer", 2D) = "black" {}
 
         [Toggle(FOG_ENABLED)]
@@ -40,7 +40,10 @@
     }
     SubShader
     {
-        Tags { "RenderType"="Transparent" "Queue"="Transparent-1"}
+        Tags
+        {
+            "RenderType"="Transparent" "Queue"="Transparent-1"
+        }
         LOD 100
 
         GrabPass
@@ -48,9 +51,13 @@
             "_WaterGrab"
         }
 
-        Pass {
+        Pass
+        {
             Name "FORWARD"
-            Tags { "LightMode" = "ForwardBase"}
+            Tags
+            {
+                "LightMode" = "ForwardBase"
+            }
 
             CGPROGRAM
             #pragma vertex vert
@@ -64,16 +71,19 @@
             #pragma target 4.0
 
             #define FORWARD_BASE_PASS
-            
-            #include "VWaterLighting.cginc"
 
+            #include "VWaterLighting.cginc"
             ENDCG
         }
 
-        Pass {
+        Pass
+        {
             Name "FORWARDADD"
-            Tags { "LightMode" = "ForwardAdd"}
-            
+            Tags
+            {
+                "LightMode" = "ForwardAdd"
+            }
+
             Blend One One
 
             CGPROGRAM
@@ -87,10 +97,9 @@
             #pragma target 4.0
 
             #include "VWaterLighting.cginc"
-
             ENDCG
         }
-        
-     }
+
+    }
 
 }

@@ -1,100 +1,67 @@
 ﻿using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-namespace Vertigo2 {
+namespace Vertigo2
+{
     public class VWaterDynamicsManager : MonoBehaviour
     {
+        public delegate void FlowEvent(Vector3 position, float radius, float amplitude, int priority = 0);
+
+        private const int THREAD_COUNT = 32;
+
+        public const int FLOW_SOURCE_MAX = 4;
 
         public static VWaterDynamicsManager instance;
         public static RenderTexture waterBuffer;
         private static RenderTexture sourceBuffer;
         private static RenderTexture oldBuffer;
+        private static Camera _mainCamera;
 
-        [Header("Water Compute Shader")]
-
-        public ComputeShader compute;
-        private ComputeShader defaultCompute;
-        private int waterKernel;
-        private int offsetKernel;
+        [Header("Water Compute Shader")] public ComputeShader compute;
 
         public int bufferSize = 512;
-        const int THREAD_COUNT = 32;
 
         public float simFramerate = 60;
 
 
-        [Header("Water Universe")]
+        [Header("Water Universe")] public float universeSize = 10; // size of the water universe
 
-        public float universeSize = 10; // size of the water universe
-        [HideInInspector]
-        public Vector2 universePos;    // position of the water universe
-
-        public bool IsPositionInUniverse(Vector3 pos)
-        {
-            float bufferSize = universeSize * 1.25f;
-            return (pos.x > universePos.x - bufferSize && pos.x < universePos.x + bufferSize
-                && pos.z > universePos.y - bufferSize && pos.z < universePos.y + bufferSize);
-        }
+        [HideInInspector] public Vector2 universePos; // position of the water universe
 
         public float followCameraGridSize = 1f;
-        private Vector2Int universeGridPos;
 
         public Texture2D flowMap;
         public float flowMapScale = 10;
+        private readonly int _fsAmp = Shader.PropertyToID("fsAmp");
 
+        // shader var hashes
+        private readonly int _fsPos = Shader.PropertyToID("fsPos");
+        private readonly int _fsRadius = Shader.PropertyToID("fsRadius");
+        private ComputeShader defaultCompute;
+        private readonly float[] flowSourceAmpBuffer = new float[FLOW_SOURCE_MAX * 4];
 
-        public struct FlowSource
-        {
-            public Vector2 position;
-            public float radius;
-            public float amplitude;
-            public int priority;
-            public bool inUse;
-            public float distance;
+        // buffers to hold flow source data before being passed to shader
+        private readonly Vector4[] flowSourcePosBuffer = new Vector4[FLOW_SOURCE_MAX];
 
-            public FlowSource(Vector3 worldPosition, float radius, float amplitude, int priority = 0)
-            {
-                position = new Vector2(worldPosition.x, worldPosition.z);
-                this.radius = radius;
-                this.amplitude = amplitude;
-                this.priority = priority;
-                inUse = true;
-                distance = 0;
-                distance = CalcDistance();
-            }
+        private readonly float[]
+            flowSourceRadiusBuffer = new float[FLOW_SOURCE_MAX * 4]; // these are x4 to align to HLSL rules
 
-            public Vector3 worldPosition
-            {
-                get
-                {
-                    return new Vector3(position.x, 0, position.y);
-                }
-                set
-                {
-                    position = new Vector2(value.x, value.z);
-                }
-            }
-
-            public void Reset()
-            {
-                position = Vector2.zero;
-                radius = 0;
-                amplitude = 0;
-                priority = -100;
-                inUse = false;
-            }
-
-            float CalcDistance()
-            {
-                if (MainCamera == null) return 0;
-                else return (MainCamera.transform.position - worldPosition).sqrMagnitude;
-            }
-        }
-
-        public const int FLOW_SOURCE_MAX = 4;
         public FlowSource[] flowSources = new FlowSource[FLOW_SOURCE_MAX];
 
+        private bool nearAnyWater;
+        private int offsetKernel;
+        private Vector2Int universeGridPos;
+        private int waterKernel;
+
+        private static Camera MainCamera
+        {
+            get
+            {
+                if (_mainCamera == null || _mainCamera.gameObject == null || !_mainCamera.isActiveAndEnabled)
+                    _mainCamera = Camera.main;
+                return _mainCamera;
+            }
+        }
 
 
         //make sure this happens first
@@ -111,8 +78,29 @@ namespace Vertigo2 {
             StartCoroutine(CullingCoroutine());
         }
 
+        private void Update()
+        {
+            // copy from flow source struct to arrays
+            for (var i = 0; i < FLOW_SOURCE_MAX; i++)
+            {
+                flowSourcePosBuffer[i] = flowSources[i].position;
+                flowSourceRadiusBuffer[i * 4] = flowSources[i].radius;
+                flowSourceAmpBuffer[i * 4] = flowSources[i].amplitude;
 
-        void SetupBuffer()
+                flowSources[i].Reset(); // clear for next frame
+            }
+        }
+
+        public bool IsPositionInUniverse(Vector3 pos)
+        {
+            var bufferSize = universeSize * 1.25f;
+            return pos.x > universePos.x - bufferSize && pos.x < universePos.x + bufferSize
+                                                      && pos.z > universePos.y - bufferSize &&
+                                                      pos.z < universePos.y + bufferSize;
+        }
+
+
+        private void SetupBuffer()
         {
             // create buffer rendertextures
             waterBuffer = new RenderTexture(bufferSize, bufferSize, 24);
@@ -131,7 +119,7 @@ namespace Vertigo2 {
             oldBuffer.Create();
         }
 
-        void SetUpCompute()
+        private void SetUpCompute()
         {
             // set constant shader vars
             compute.SetInt("BUFFER_SIZE", bufferSize);
@@ -150,58 +138,41 @@ namespace Vertigo2 {
         }
 
 
-        IEnumerator SimCoroutine()
+        private IEnumerator SimCoroutine()
         {
             while (true)
             {
                 //while (GameManager.options.graphics_gpuWaterDynamics == 0) 
                 //    yield return new WaitForSeconds(1f); // idle while water dynamics are turned off
 
-                float deltaTime = 1f / simFramerate;
+                var deltaTime = 1f / simFramerate;
                 yield return new WaitForSeconds(deltaTime);
                 yield return new WaitForEndOfFrame();
                 UpdateSimulation(deltaTime);
             }
         }
 
-        static Camera MainCamera
-        {
-            get
-            {
-                if(_mainCamera == null || _mainCamera.gameObject == null || !_mainCamera.isActiveAndEnabled)
-                {
-                    _mainCamera = Camera.main;
-                }
-                return _mainCamera;
-            }
-        }
-        static Camera _mainCamera;
-
-        void UpdateSimulation(float deltaTime)
+        private void UpdateSimulation(float deltaTime)
         {
             if (MainCamera == null) return;
-            Vector3 camPos = MainCamera.transform.position;
-            Vector2Int camGridPos = new Vector2Int(Mathf.RoundToInt(camPos.x / followCameraGridSize),
-                                                    Mathf.RoundToInt(camPos.z / followCameraGridSize));
+            var camPos = MainCamera.transform.position;
+            var camGridPos = new Vector2Int(Mathf.RoundToInt(camPos.x / followCameraGridSize),
+                Mathf.RoundToInt(camPos.z / followCameraGridSize));
 
             if (camGridPos != universeGridPos)
             {
                 universeGridPos = camGridPos;
-                Vector2 newUniversePos = ((Vector2)universeGridPos * followCameraGridSize);
+                var newUniversePos = (Vector2)universeGridPos * followCameraGridSize;
                 MoveUniverse(newUniversePos);
             }
 
-            if (nearAnyWater)
-            {
-                UpdateComputeShader(deltaTime);
-            }
+            if (nearAnyWater) UpdateComputeShader(deltaTime);
         }
 
-        bool nearAnyWater = false;
-        IEnumerator CullingCoroutine()
+        private IEnumerator CullingCoroutine()
         {
             VWaterBase nearestWater = null;
-            float nearestDist = float.MaxValue;
+            var nearestDist = float.MaxValue;
 
             while (true)
             {
@@ -211,38 +182,42 @@ namespace Vertigo2 {
                 nearestWater = null;
                 nearestDist = float.MaxValue;
 
-                bool anyWater = false;
-                for (int i = 0; i < VWaterManager.activeWater.Count; i++)
+                var anyWater = false;
+                for (var i = 0; i < VWaterManager.activeWater.Count; i++)
                 {
-                    if (VWaterManager.activeWater[i] != null && VWaterManager.activeWater[i] is VWater && ((VWater)VWaterManager.activeWater[i]).linkedRenderer != null)
+                    if (VWaterManager.activeWater[i] != null && VWaterManager.activeWater[i] is VWater &&
+                        ((VWater)VWaterManager.activeWater[i]).linkedRenderer != null)
                     {
-                        bool near = IsNearWater(VWaterManager.activeWater[i]);
+                        var near = IsNearWater(VWaterManager.activeWater[i]);
                         ((VWater)VWaterManager.activeWater[i]).linkedRenderer.cullDynamics = !near;
                         if (near) anyWater = true;
 
                         if (MainCamera != null)
                         {
                             // find nearest water by comparing distance to surface bounds
-                            Vector3 clampPos = MainCamera.transform.position;
-                            Rect b = VWaterManager.activeWater[i].bounds2D;
-                            clampPos = new Vector3(Mathf.Clamp(clampPos.x, b.xMin, b.xMax), VWaterManager.activeWater[i].transform.position.y, Mathf.Clamp(clampPos.z, b.yMin, b.yMax));
-                            float dist = (MainCamera.transform.position - clampPos).sqrMagnitude;
-                            if(dist < nearestDist)
+                            var clampPos = MainCamera.transform.position;
+                            var b = VWaterManager.activeWater[i].bounds2D;
+                            clampPos = new Vector3(Mathf.Clamp(clampPos.x, b.xMin, b.xMax),
+                                VWaterManager.activeWater[i].transform.position.y,
+                                Mathf.Clamp(clampPos.z, b.yMin, b.yMax));
+                            var dist = (MainCamera.transform.position - clampPos).sqrMagnitude;
+                            if (dist < nearestDist)
                             {
                                 nearestWater = VWaterManager.activeWater[i];
                                 nearestDist = dist;
                             }
                         }
                     }
+
                     yield return null;
                 }
 
-                if(nearestWater != null)
+                if (nearestWater != null)
                 {
                     // allow using custom compute shader per-water
-                    if(nearestWater.waterOverride != null && nearestWater.waterOverride.computeShader != null)
+                    if (nearestWater.waterOverride != null && nearestWater.waterOverride.computeShader != null)
                     {
-                        if (compute != nearestWater.waterOverride.computeShader) 
+                        if (compute != nearestWater.waterOverride.computeShader)
                         {
                             compute = nearestWater.waterOverride.computeShader;
                             SetUpCompute();
@@ -274,58 +249,33 @@ namespace Vertigo2 {
             position.y = 0;
 
             // find a free flow source to add to.
-            for (int i = 0; i < FLOW_SOURCE_MAX; i++)
-            {
+            for (var i = 0; i < FLOW_SOURCE_MAX; i++)
                 if (!flowSources[i].inUse)
                 {
                     flowSources[i] = new FlowSource(position, radius, amplitude, priority);
                     return;
                 }
-            }
 
             // override existing flow sources if higher priority
-            for (int i = 0; i < FLOW_SOURCE_MAX; i++)
+            for (var i = 0; i < FLOW_SOURCE_MAX; i++)
             {
-                float dist = (CameraPos() - position).sqrMagnitude;
+                var dist = (CameraPos() - position).sqrMagnitude;
                 if (!flowSources[i].inUse
-                    || (priority > flowSources[i].priority
-                    || (priority == flowSources[i].priority && dist < flowSources[i].distance)))
+                    || priority > flowSources[i].priority
+                    || (priority == flowSources[i].priority && dist < flowSources[i].distance))
                 {
                     flowSources[i] = new FlowSource(position, radius, amplitude, priority);
                     return;
                 }
             }
         }
-        public delegate void FlowEvent(Vector3 position, float radius, float amplitude, int priority = 0);
+
         public static event FlowEvent OnFlowAdded;
 
-        Vector3 CameraPos()
+        private Vector3 CameraPos()
         {
             if (MainCamera != null) return MainCamera.transform.position;
-            else return Vector3.zero;
-        }
-
-        // buffers to hold flow source data before being passed to shader
-        Vector4[] flowSourcePosBuffer = new Vector4[FLOW_SOURCE_MAX];
-        float[] flowSourceRadiusBuffer = new float[FLOW_SOURCE_MAX * 4]; // these are x4 to align to HLSL rules
-        float[] flowSourceAmpBuffer = new float[FLOW_SOURCE_MAX * 4];
-
-        // shader var hashes
-        private int _fsPos = Shader.PropertyToID("fsPos");
-        private int _fsRadius = Shader.PropertyToID("fsRadius");
-        private int _fsAmp = Shader.PropertyToID("fsAmp");
-
-        private void Update()
-        {
-            // copy from flow source struct to arrays
-            for (int i = 0; i < FLOW_SOURCE_MAX; i++)
-            {
-                flowSourcePosBuffer[i] = flowSources[i].position;
-                flowSourceRadiusBuffer[i * 4] = flowSources[i].radius;
-                flowSourceAmpBuffer[i * 4] = flowSources[i].amplitude;
-
-                flowSources[i].Reset(); // clear for next frame
-            }
+            return Vector3.zero;
         }
 
         private void UpdateComputeShader(float deltaTime)
@@ -350,8 +300,8 @@ namespace Vertigo2 {
 
         private void MoveUniverse(Vector2 newPosition)
         {
-            Vector2 oldPosition = universePos;
-            Vector2 delta = newPosition - oldPosition;
+            var oldPosition = universePos;
+            var delta = newPosition - oldPosition;
 
             OffsetBuffers(delta);
 
@@ -376,7 +326,6 @@ namespace Vertigo2 {
             compute.Dispatch(offsetKernel, bufferSize / THREAD_COUNT, bufferSize / THREAD_COUNT, 1);
 
 
-
             // ======== Main =========
 
             // store the waterBuffer so we can offset it
@@ -391,17 +340,60 @@ namespace Vertigo2 {
 
         public void ClearBuffer(RenderTexture renderTexture)
         {
-            RenderTexture rt = RenderTexture.active;
+            var rt = RenderTexture.active;
             RenderTexture.active = renderTexture;
             GL.Clear(true, true, Color.clear);
             RenderTexture.active = rt;
         }
 
-        bool IsNearWater(VWaterBase w)
+        private bool IsNearWater(VWaterBase w)
         {
-            Rect universeRect = new Rect(universePos - Vector2.one * universeSize / 2, Vector2.one * universeSize);
+            var universeRect = new Rect(universePos - Vector2.one * universeSize / 2, Vector2.one * universeSize);
 
             return universeRect.Overlaps(w.bounds2D);
+        }
+
+
+        public struct FlowSource
+        {
+            public Vector2 position;
+            public float radius;
+            public float amplitude;
+            public int priority;
+            public bool inUse;
+            public float distance;
+
+            public FlowSource(Vector3 worldPosition, float radius, float amplitude, int priority = 0)
+            {
+                position = new Vector2(worldPosition.x, worldPosition.z);
+                this.radius = radius;
+                this.amplitude = amplitude;
+                this.priority = priority;
+                inUse = true;
+                distance = 0;
+                distance = CalcDistance();
+            }
+
+            public Vector3 worldPosition
+            {
+                get => new(position.x, 0, position.y);
+                set => position = new Vector2(value.x, value.z);
+            }
+
+            public void Reset()
+            {
+                position = Vector2.zero;
+                radius = 0;
+                amplitude = 0;
+                priority = -100;
+                inUse = false;
+            }
+
+            private float CalcDistance()
+            {
+                if (MainCamera == null) return 0;
+                return (MainCamera.transform.position - worldPosition).sqrMagnitude;
+            }
         }
     }
 }

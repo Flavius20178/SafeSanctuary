@@ -12,24 +12,24 @@ float GradientNoise(float2 uv)
     float2 f = frac(p);
     float2 u = f * f * (3.0 - 2.0 * f);
     return lerp(lerp(dot(GradientNoiseDir(i + float2(0.0, 0.0)), f - float2(0.0, 0.0)),
-        dot(GradientNoiseDir(i + float2(1.0, 0.0)), f - float2(1.0, 0.0)), u.x),
-        lerp(dot(GradientNoiseDir(i + float2(0.0, 1.0)), f - float2(0.0, 1.0)),
-            dot(GradientNoiseDir(i + float2(1.0, 1.0)), f - float2(1.0, 1.0)), u.x), u.y);
+                     dot(GradientNoiseDir(i + float2(1.0, 0.0)), f - float2(1.0, 0.0)), u.x),
+                lerp(dot(GradientNoiseDir(i + float2(0.0, 1.0)), f - float2(0.0, 1.0)),
+                     dot(GradientNoiseDir(i + float2(1.0, 1.0)), f - float2(1.0, 1.0)), u.x), u.y);
 }
 
 
-inline float Unity_SimpleNoise_RandomValue_float (float2 uv)
+inline float Unity_SimpleNoise_RandomValue_float(float2 uv)
 {
-    return frac(sin(dot(uv, float2(12.9898, 78.233)))*43758.5453);
+    return frac(sin(dot(uv, float2(12.9898, 78.233))) * 43758.5453);
 }
 
-inline float Unity_SimpleNnoise_Interpolate_float (float a, float b, float t)
+inline float Unity_SimpleNnoise_Interpolate_float(float a, float b, float t)
 {
-    return (1.0-t)*a + (t*b);
+    return (1.0 - t) * a + (t * b);
 }
 
 
-inline float Unity_SimpleNoise_ValueNoise_float (float2 uv)
+inline float Unity_SimpleNoise_ValueNoise_float(float2 uv)
 {
     float2 i = floor(uv);
     float2 f = frac(uv);
@@ -58,16 +58,16 @@ float SimplexNoise(float2 uv)
     uv *= 2;
 
     float freq = pow(2.0, float(0));
-    float amp = pow(0.5, float(3-0));
-    t += Unity_SimpleNoise_ValueNoise_float(float2(uv.x/freq, uv.y/freq))*amp;
+    float amp = pow(0.5, float(3 - 0));
+    t += Unity_SimpleNoise_ValueNoise_float(float2(uv.x / freq, uv.y / freq)) * amp;
 
     freq = pow(2.0, float(1));
-    amp = pow(0.5, float(3-1));
-    t += Unity_SimpleNoise_ValueNoise_float(float2(uv.x/freq, uv.y/freq))*amp;
+    amp = pow(0.5, float(3 - 1));
+    t += Unity_SimpleNoise_ValueNoise_float(float2(uv.x / freq, uv.y / freq)) * amp;
 
     freq = pow(2.0, float(2));
-    amp = pow(0.5, float(3-2));
-    t += Unity_SimpleNoise_ValueNoise_float(float2(uv.x/freq, uv.y/freq))*amp;
+    amp = pow(0.5, float(3 - 2));
+    t += Unity_SimpleNoise_ValueNoise_float(float2(uv.x / freq, uv.y / freq)) * amp;
 
     return t;
 }

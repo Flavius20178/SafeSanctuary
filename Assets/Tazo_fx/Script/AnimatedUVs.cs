@@ -1,20 +1,21 @@
 ﻿using UnityEngine;
-using System.Collections;
 
 namespace TazoScript
 {
     public class AnimatedUVs : MonoBehaviour
     {
         public float speedY = 0.5F;
-        public float speedx = 0.0F;
-        private float offsety = 0.0F;
-        private float offsetx = 0.0F;
+        public float speedx;
+        private float offsetx;
+        private float offsety;
         private Renderer rend;
-        void Start()
+
+        private void Start()
         {
             rend = GetComponent<Renderer>();
         }
-        void Update()
+
+        private void Update()
         {
             offsety += Time.deltaTime * speedY;
             offsetx += Time.deltaTime * speedx;

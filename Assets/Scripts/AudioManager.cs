@@ -1,18 +1,18 @@
-using UnityEngine.Audio;
 using System;
 using UnityEngine;
 
 //Credit to Brackeys youtube tutorial on Audio managers, as the majority of this code and learning how to use it was made by him.
-[System.Serializable]
+[Serializable]
 public class Sound
 {
     public string name;
     public AudioClip clip;
-    [Range(0,1)]
-    public float volume = 1;
-    [Range(-3,3)]
-    public float pitch = 1;
-    public bool loop = false;
+
+    [Range(0, 1)] public float volume = 1;
+
+    [Range(-3, 3)] public float pitch = 1;
+
+    public bool loop;
     public AudioSource source;
 
     public Sound()
@@ -25,15 +25,17 @@ public class Sound
 
 public class AudioManager : MonoBehaviour
 {
-    public Sound[] sounds;
-
     public static AudioManager instance;
+
+    public Sound[] sounds;
     //AudioManager
 
-    void Awake()
+    private void Awake()
     {
         if (instance == null)
+        {
             instance = this;
+        }
         else
         {
             Destroy(gameObject);
@@ -42,9 +44,9 @@ public class AudioManager : MonoBehaviour
 
         DontDestroyOnLoad(gameObject);
 
-        foreach (Sound s in sounds)
+        foreach (var s in sounds)
         {
-            if(!s.source)
+            if (!s.source)
                 s.source = gameObject.AddComponent<AudioSource>();
 
             s.source.clip = s.clip;
@@ -57,7 +59,7 @@ public class AudioManager : MonoBehaviour
 
     public void Play(string name)
     {
-        Sound s = Array.Find(sounds, sound => sound.name == name);
+        var s = Array.Find(sounds, sound => sound.name == name);
         if (s == null)
         {
             Debug.LogWarning("Sound: " + name + " not found");
@@ -69,7 +71,7 @@ public class AudioManager : MonoBehaviour
 
     public void Stop(string name)
     {
-        Sound s = Array.Find(sounds, sound => sound.name == name);
+        var s = Array.Find(sounds, sound => sound.name == name);
 
         s.source.Stop();
     }

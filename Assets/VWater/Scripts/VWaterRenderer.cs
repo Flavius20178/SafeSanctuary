@@ -1,6 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
-using UnityEditor.EditorTools;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -9,44 +9,58 @@ namespace Vertigo2
     [ExecuteInEditMode]
     public class VWaterRenderer : MonoBehaviour
     {
-        [Header("References")]
+        private const CameraEvent renderTime = CameraEvent.AfterForwardAlpha;
 
-        [Tooltip("Material to draw over camera when submerged")]
+        // stores quad
+        private static Mesh m_overlayMesh;
+
+
+        private static readonly int _GlobalWaterHeight = Shader.PropertyToID("_GlobalWaterHeight");
+        private static readonly int _LightingColor = Shader.PropertyToID("_LightingColor");
+        private static int _LightColor0 = Shader.PropertyToID("_LightColor0");
+        private static readonly int _AbsorptionColor = Shader.PropertyToID("_AbsorptionColor");
+        private static readonly int _ScatteringColor = Shader.PropertyToID("_ScatteringColor");
+        private static readonly int _Density = Shader.PropertyToID("_Density");
+
+        [Header("References")] [Tooltip("Material to draw over camera when submerged")]
         public Material overlayMaterial;
-        [Tooltip("Water to render")]
-        public VWater linkedWater;
 
-        [Header("Options")]
+        [Tooltip("Water to render")] public VWater linkedWater;
 
-        [ColorUsage(false, true)]
-        [Tooltip("Extra ambient lighting color")]
+        [Header("Options")] [ColorUsage(false, true)] [Tooltip("Extra ambient lighting color")]
         public Color lightingColor;
-        [Tooltip("Sun light to use")]
-        public Light sunLight;
+
+        [Tooltip("Sun light to use")] public Light sunLight;
 
         [Tooltip("Draw underwater fx when your view goes underwater")]
         public bool drawWaterOverlay = true;
 
-        [Tooltip("Enable wave simulation")]
-        public bool enableDynamicWaves = true;
+        [Tooltip("Enable wave simulation")] public bool enableDynamicWaves = true;
 
         [Tooltip("Render underwater fx in scene view. This sometimes doesn't work properly")]
         public bool testInEditor;
 
-        private new Renderer renderer;
-        private Material mat;
+        [HideInInspector] public bool cullDynamics;
 
-        private int _WaveBufferWorldSize = Shader.PropertyToID("_WaveBufferWorldSize");
-        private int _WaveBufferWorldPos = Shader.PropertyToID("_WaveBufferWorldPos");
+
+        private readonly int _Flow = Shader.PropertyToID("_Flow");
+        private readonly int _WaveBufferWorldPos = Shader.PropertyToID("_WaveBufferWorldPos");
+
+        private readonly int _WaveBufferWorldSize = Shader.PropertyToID("_WaveBufferWorldSize");
+        private Camera[] allCameras;
         private bool dynamicsKeywordEnabled;
-
-        MaterialPropertyBlock props;
-
-        private Bounds waterCamVolume;
         private Vector3 lastUpdatePos;
         private Vector3 lastUpdateScl;
 
         private Color lightColor0;
+        private readonly Dictionary<Camera, CommandBuffer> m_Cameras = new();
+        private Material mat;
+
+        private MaterialPropertyBlock props;
+
+        private new Renderer renderer;
+
+        private Bounds waterCamVolume;
 
         // constructs a quad
         private static Mesh overlayMesh
@@ -59,37 +73,37 @@ namespace Vertigo2
 
                     var vertices = new Vector3[4]
                     {
-                    new Vector3(-0.5f, -0.5f, 0),
-                    new Vector3(0.5f, -0.5f, 0),
-                    new Vector3(-0.5f, 0.5f, 0),
-                    new Vector3(0.5f, 0.5f, 0)
+                        new(-0.5f, -0.5f, 0),
+                        new(0.5f, -0.5f, 0),
+                        new(-0.5f, 0.5f, 0),
+                        new(0.5f, 0.5f, 0)
                     };
                     m_overlayMesh.vertices = vertices;
 
                     var tris = new int[6]
                     {
-                    // lower left triangle
-                    0, 2, 1,
-                    // upper right triangle
-                    2, 3, 1
+                        // lower left triangle
+                        0, 2, 1,
+                        // upper right triangle
+                        2, 3, 1
                     };
                     m_overlayMesh.triangles = tris;
 
                     var normals = new Vector3[4]
                     {
-                    -Vector3.forward,
-                    -Vector3.forward,
-                    -Vector3.forward,
-                    -Vector3.forward
+                        -Vector3.forward,
+                        -Vector3.forward,
+                        -Vector3.forward,
+                        -Vector3.forward
                     };
                     m_overlayMesh.normals = normals;
 
                     var uv = new Vector2[4]
                     {
-                    new Vector2(0, 0),
-                    new Vector2(1, 0),
-                    new Vector2(0, 1),
-                    new Vector2(1, 1)
+                        new(0, 0),
+                        new(1, 0),
+                        new(0, 1),
+                        new(1, 1)
                     };
                     m_overlayMesh.uv = uv;
                 }
@@ -97,11 +111,6 @@ namespace Vertigo2
                 return m_overlayMesh;
             }
         }
-        // stores quad
-        private static Mesh m_overlayMesh;
-
-        [HideInInspector]
-        public bool cullDynamics = false;
 
 
         private void Start()
@@ -110,7 +119,7 @@ namespace Vertigo2
 
             if (renderer != null)
             {
-                if(Application.isPlaying)
+                if (Application.isPlaying)
                     mat = renderer.material; // instance material at runtime
                 else
                     mat = renderer.sharedMaterial;
@@ -122,27 +131,6 @@ namespace Vertigo2
             if (linkedWater != null) linkedWater.linkedRenderer = this;
         }
 
-        private void OnEnable()
-        {
-            GenerateWaterBounds();
-            RefreshSurfaceRendererBounds();
-            StartCoroutine(UpdateBoundsWhenNeeded());
-        }
-
-        public void OnDisable()
-        {
-            foreach (var cam in m_Cameras)
-            {
-                if (cam.Key)
-                {
-                    cam.Key.RemoveCommandBuffer(renderTime, cam.Value);
-                }
-            }
-        }
-
-
-
-        int _Flow = Shader.PropertyToID("_Flow");
         private void Update()
         {
             if (renderer != null)
@@ -151,14 +139,15 @@ namespace Vertigo2
                     props = new MaterialPropertyBlock();
 
                 props.SetColor(_LightingColor, lightingColor.gamma);
-                if(linkedWater != null)
+                if (linkedWater != null)
                     props.SetVector(_Flow, new Vector4(linkedWater.globalFlow.x, linkedWater.globalFlow.z, 0, 0));
                 renderer.SetPropertyBlock(props);
 
 
                 if (Application.isPlaying && mat != null)
                 {
-                    if (!cullDynamics /*&& GameManager.options.graphics_gpuWaterDynamics > 0*/ && enableDynamicWaves && VWaterDynamicsManager.instance != null)
+                    if (!cullDynamics /*&& GameManager.options.graphics_gpuWaterDynamics > 0*/ && enableDynamicWaves &&
+                        VWaterDynamicsManager.instance != null)
                     {
                         // update dynamic water info for shader
                         mat.SetFloat(_WaveBufferWorldSize, VWaterDynamicsManager.instance.universeSize);
@@ -181,14 +170,54 @@ namespace Vertigo2
             }
         }
 
-        IEnumerator UpdateBoundsWhenNeeded()
+        private void LateUpdate()
+        {
+            if (overlayMaterial == null) return;
+
+            allCameras = Camera.allCameras;
+            for (var i = 0; i < allCameras.Length; i++) UpdateOverlayForCamera(allCameras[i]);
+#if UNITY_EDITOR
+            // support for scene cameras
+            allCameras = SceneView.GetAllSceneCameras();
+            for (var i = 0; i < allCameras.Length; i++) UpdateOverlayForCamera(allCameras[i]);
+#endif
+        }
+
+        private void OnEnable()
+        {
+            GenerateWaterBounds();
+            RefreshSurfaceRendererBounds();
+            StartCoroutine(UpdateBoundsWhenNeeded());
+        }
+
+        public void OnDisable()
+        {
+            foreach (var cam in m_Cameras)
+                if (cam.Key)
+                    cam.Key.RemoveCommandBuffer(renderTime, cam.Value);
+        }
+
+        private void OnDrawGizmosSelected()
+        {
+            Gizmos.DrawWireCube(waterCamVolume.center, waterCamVolume.size);
+        }
+
+        private void OnWillRenderObject()
+        {
+            if (renderer != null)
+                // cache this for drawing the overlay
+                //lightColor0 = Shader.GetGlobalColor(_LightColor0);
+                Camera.current.depthTextureMode |= DepthTextureMode.Depth;
+        }
+
+        private IEnumerator UpdateBoundsWhenNeeded()
         {
             yield return null;
             while (true)
             {
                 yield return new WaitForFixedUpdate();
-                float distFromLastUpdate = (transform.position - lastUpdatePos).sqrMagnitude;
-                float sclFromLastUpdate = (transform.lossyScale - lastUpdateScl).sqrMagnitude;
+                var distFromLastUpdate = (transform.position - lastUpdatePos).sqrMagnitude;
+                var sclFromLastUpdate = (transform.lossyScale - lastUpdateScl).sqrMagnitude;
                 if (distFromLastUpdate > 0.01f || sclFromLastUpdate > 0.01f)
                 {
                     lastUpdatePos = transform.position;
@@ -199,27 +228,27 @@ namespace Vertigo2
             }
         }
 
-        void GenerateWaterBounds()
+        private void GenerateWaterBounds()
         {
             if (linkedWater == null) return;
 
-            Collider[] m_cols = linkedWater.GetComponentsInChildren<Collider>();
+            var m_cols = linkedWater.GetComponentsInChildren<Collider>();
             if (m_cols.Length > 0)
             {
                 //create bounds combining all collider bounds
                 waterCamVolume = m_cols[0].bounds;
-                for (int i = 1; i < m_cols.Length; i++)
+                for (var i = 1; i < m_cols.Length; i++)
                 {
                     waterCamVolume.Encapsulate(m_cols[i].bounds.max);
                     waterCamVolume.Encapsulate(m_cols[i].bounds.min);
                 }
+
                 waterCamVolume.Expand(1f);
             }
         }
 
 
-        
-        void RefreshSurfaceRendererBounds()
+        private void RefreshSurfaceRendererBounds()
         {
             if (linkedWater != null && renderer != null)
             {
@@ -228,51 +257,15 @@ namespace Vertigo2
             }
         }
 
-        private void OnDrawGizmosSelected()
-        {
-            Gizmos.DrawWireCube(waterCamVolume.center, waterCamVolume.size);
-        }
-
-        private void OnWillRenderObject()
-        {
-            if (renderer != null) 
-            {
-                // cache this for drawing the overlay
-                //lightColor0 = Shader.GetGlobalColor(_LightColor0);
-                Camera.current.depthTextureMode |= DepthTextureMode.Depth;
-            }
-        }
-
-        const CameraEvent renderTime = CameraEvent.AfterForwardAlpha;
-        private Camera[] allCameras;
-        private Dictionary<Camera, CommandBuffer> m_Cameras = new Dictionary<Camera, CommandBuffer>();
-        private void LateUpdate()
-        {
-            if (overlayMaterial == null) return;
-
-            allCameras = Camera.allCameras;
-            for (int i = 0; i < allCameras.Length; i++)
-            {
-                UpdateOverlayForCamera(allCameras[i]);
-            }
-#if UNITY_EDITOR
-            // support for scene cameras
-            allCameras = UnityEditor.SceneView.GetAllSceneCameras();
-            for (int i = 0; i < allCameras.Length; i++)
-            {
-                UpdateOverlayForCamera(allCameras[i]);
-            }
-#endif
-        }
-
-        void UpdateOverlayForCamera(Camera cam)
+        private void UpdateOverlayForCamera(Camera cam)
         {
             // if the camera is inside our surrounding volume, and we should actually draw this overlay
-            if (drawWaterOverlay && (Application.isPlaying || testInEditor) && waterCamVolume.Contains(cam.transform.position))
+            if (drawWaterOverlay && (Application.isPlaying || testInEditor) &&
+                waterCamVolume.Contains(cam.transform.position))
             {
                 if (!m_Cameras.ContainsKey(cam))
                 {
-                    CommandBuffer buf = new CommandBuffer();
+                    var buf = new CommandBuffer();
                     buf.name = "Water View Buffer";
                     m_Cameras[cam] = buf;
 
@@ -283,7 +276,8 @@ namespace Vertigo2
             else
             {
                 if (m_Cameras.ContainsKey(cam))
-                { // remove command buffer when camera is not in water
+                {
+                    // remove command buffer when camera is not in water
                     cam.RemoveCommandBuffer(renderTime, m_Cameras[cam]);
                     CameraEvents.GetFromCamera(cam).ce_OnPreRender -= OnPreRenderForCamera; // deregister
                     m_Cameras.Remove(cam);
@@ -291,26 +285,21 @@ namespace Vertigo2
             }
         }
 
-
-        static int _GlobalWaterHeight = Shader.PropertyToID("_GlobalWaterHeight");
-        static int _LightingColor = Shader.PropertyToID("_LightingColor");
-        static int _LightColor0 = Shader.PropertyToID("_LightColor0");
-        static int _AbsorptionColor = Shader.PropertyToID("_AbsorptionColor");
-        static int _ScatteringColor = Shader.PropertyToID("_ScatteringColor");
-        static int _Density = Shader.PropertyToID("_Density");
-
-        void OnPreRenderForCamera(Camera cam)
+        private void OnPreRenderForCamera(Camera cam)
         {
-            CommandBuffer buf = m_Cameras[cam];
+            var buf = m_Cameras[cam];
             buf.Clear();
 
             if (linkedWater != null)
-            { // water parameters
+            {
+                // water parameters
                 overlayMaterial.SetFloat(_GlobalWaterHeight, linkedWater.Position);
-                overlayMaterial.SetColor(_LightingColor, sunLight != null ? lightingColor + sunLight.color * sunLight.intensity : lightingColor);
+                overlayMaterial.SetColor(_LightingColor,
+                    sunLight != null ? lightingColor + sunLight.color * sunLight.intensity : lightingColor);
 
                 if (renderer != null)
-                { // water material parameters
+                {
+                    // water material parameters
                     overlayMaterial.SetColor(_AbsorptionColor, renderer.sharedMaterial.GetColor(_AbsorptionColor));
                     overlayMaterial.SetColor(_ScatteringColor, renderer.sharedMaterial.GetColor(_ScatteringColor));
                     overlayMaterial.SetFloat(_Density, renderer.sharedMaterial.GetFloat(_Density));
@@ -318,10 +307,10 @@ namespace Vertigo2
             }
 
             // scale quad to fill fov of camera
-            float scl = Mathf.Tan(cam.fieldOfView / 2 * Mathf.Deg2Rad) * cam.nearClipPlane * 8 * 2;
+            var scl = Mathf.Tan(cam.fieldOfView / 2 * Mathf.Deg2Rad) * cam.nearClipPlane * 8 * 2;
 
             // position quad in front of camera
-            Matrix4x4 matrix = Matrix4x4.TRS(cam.transform.position + cam.transform.forward * (cam.nearClipPlane * 1.05f),
+            var matrix = Matrix4x4.TRS(cam.transform.position + cam.transform.forward * (cam.nearClipPlane * 1.05f),
                 cam.transform.rotation, new Vector3(scl, scl, scl));
 
             buf.DrawMesh(overlayMesh, matrix, overlayMaterial, 0, 0); // grab pass

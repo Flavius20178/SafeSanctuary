@@ -5,34 +5,34 @@ public class FreeCameraController : MonoBehaviour
     public float movementSpeed = 10f;
     public float lookSpeed = 2f;
 
-    private float rotationX = 0f;
-    private float rotationY = 0f;
+    private float rotationX;
+    private float rotationY;
 
-    void Update()
+    private void Update()
     {
         HandleMovement();
         HandleLook();
     }
 
-    void HandleMovement()
+    private void HandleMovement()
     {
-        float moveX = Input.GetAxis("Horizontal"); // A/D
-        float moveZ = Input.GetAxis("Vertical");   // W/S
-        float moveY = 0f;
+        var moveX = Input.GetAxis("Horizontal"); // A/D
+        var moveZ = Input.GetAxis("Vertical"); // W/S
+        var moveY = 0f;
 
-        if (Input.GetKey(KeyCode.E)) moveY += 1f;  // Up
-        if (Input.GetKey(KeyCode.Q)) moveY -= 1f;  // Down
+        if (Input.GetKey(KeyCode.E)) moveY += 1f; // Up
+        if (Input.GetKey(KeyCode.Q)) moveY -= 1f; // Down
 
-        Vector3 move = transform.right * moveX + transform.forward * moveZ + transform.up * moveY;
+        var move = transform.right * moveX + transform.forward * moveZ + transform.up * moveY;
         transform.position += move * movementSpeed * Time.deltaTime;
     }
 
-    void HandleLook()
+    private void HandleLook()
     {
         if (Input.GetMouseButton(1)) // Right Mouse Button
         {
-            float mouseX = Input.GetAxis("Mouse X") * lookSpeed;
-            float mouseY = Input.GetAxis("Mouse Y") * lookSpeed;
+            var mouseX = Input.GetAxis("Mouse X") * lookSpeed;
+            var mouseY = Input.GetAxis("Mouse Y") * lookSpeed;
 
             rotationX -= mouseY;
             rotationY += mouseX;

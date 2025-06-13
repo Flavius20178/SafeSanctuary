@@ -1,23 +1,25 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 
 namespace sc.terrain.proceduralpainter
 {
-    [System.Serializable]
+    [Serializable]
     public class TextureMask : Modifier
     {
         public Texture2D texture;
-        [Attributes.ChannelPicker]
-        public int channel;
+
+        [Attributes.ChannelPicker] public int channel;
 
         [Tooltip("Spans the texture across all terrains")]
         public bool spanTerrains;
+
         public float tiling = 1f;
-        
+
         public void OnEnable()
         {
             passIndex = FilterPass.TextureMask;
         }
-        
+
         public override void Configure(Material material)
         {
             base.Configure(material);

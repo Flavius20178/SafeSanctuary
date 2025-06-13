@@ -1,38 +1,33 @@
-using UnityEngine;
-using UnityEngine.XR.Hands.Processing;
-
 namespace UnityEngine.XR.Hands.Samples.VisualizerSample
 {
     public class JointVisualizer : MonoBehaviour
     {
-        [SerializeField]
-        GameObject m_JointVisual;
+        [SerializeField] private GameObject m_JointVisual;
 
-        [SerializeField]
-        Material m_HighFidelityJointMaterial;
+        [SerializeField] private Material m_HighFidelityJointMaterial;
 
-        [SerializeField]
-        Material m_LowFidelityJointMaterial;
+        [SerializeField] private Material m_LowFidelityJointMaterial;
 
-        bool m_HighFidelityJoint;
+        private bool m_HighFidelityJoint;
 
-        Renderer m_JointRenderer;
+        private Renderer m_JointRenderer;
+
+        private void Start()
+        {
+            if (m_JointVisual.TryGetComponent<Renderer>(out var jointRenderer))
+                m_JointRenderer = jointRenderer;
+        }
 
         public void NotifyTrackingState(XRHandJointTrackingState jointTrackingState)
         {
-            bool highFidelityJoint = (jointTrackingState & XRHandJointTrackingState.HighFidelityPose) == XRHandJointTrackingState.HighFidelityPose;
+            var highFidelityJoint = (jointTrackingState & XRHandJointTrackingState.HighFidelityPose) ==
+                                    XRHandJointTrackingState.HighFidelityPose;
             if (m_HighFidelityJoint == highFidelityJoint)
                 return;
 
             m_JointRenderer.material = highFidelityJoint ? m_HighFidelityJointMaterial : m_LowFidelityJointMaterial;
 
             m_HighFidelityJoint = highFidelityJoint;
-        }
-
-        void Start()
-        {
-            if (m_JointVisual.TryGetComponent<Renderer>(out var jointRenderer))
-                m_JointRenderer = jointRenderer;
         }
     }
 }

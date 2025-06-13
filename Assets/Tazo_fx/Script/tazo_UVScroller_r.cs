@@ -1,24 +1,22 @@
 using UnityEngine;
-using System.Collections;
+
 namespace TazoScript
 {
     public class tazo_UVScroller_r : MonoBehaviour
     {
-
-        public int targetMaterialSlot = 0;
-        private Renderer myrender;
+        public int targetMaterialSlot;
         public float speedY = 0.5f;
-        public float speedX = 0.0f;
-        private float timeWentX = 0;
-        private float timeWentY = 0;
+        public float speedX;
+        private Renderer myrender;
+        private float timeWentX;
+        private float timeWentY;
 
-        void Start()
+        private void Start()
         {
-
             myrender = GetComponent<Renderer>();
         }
 
-        void Update()
+        private void Update()
         {
             timeWentY += Time.deltaTime * speedY;
             timeWentX += Time.deltaTime * speedX;

@@ -7,85 +7,112 @@ using UnityEngine.XR.OpenXR;
 namespace UnityEngine.XR.Hands.Samples.VisualizerSample
 {
     /// <summary>
-    /// This component visualizes the hand joints and mesh for the left and right hands.
+    ///     This component visualizes the hand joints and mesh for the left and right hands.
     /// </summary>
     public class HandVisualizer : MonoBehaviour
     {
         /// <summary>
-        /// The type of velocity to visualize.
+        ///     The type of velocity to visualize.
         /// </summary>
         public enum VelocityType
         {
             /// <summary>
-            /// Visualize the linear velocity of the joint.
+            ///     Visualize the linear velocity of the joint.
             /// </summary>
             Linear,
 
             /// <summary>
-            /// Visualize the angular velocity of the joint.
+            ///     Visualize the angular velocity of the joint.
             /// </summary>
             Angular,
 
             /// <summary>
-            /// Do not visualize velocity.
+            ///     Do not visualize velocity.
             /// </summary>
-            None,
+            None
         }
 
 #if !XRHANDS_1_6_0
         /// <summary>
-        /// Describes which version of authored hand meshes is detected for use by the provider.
+        ///     Describes which version of authored hand meshes is detected for use by the provider.
         /// </summary>
         public enum XRDetectedHandMeshLayout
         {
             /// <summary>
-            /// The system was unable to detect a hand mesh layout to use.
+            ///     The system was unable to detect a hand mesh layout to use.
             /// </summary>
             Unknown,
 
             /// <summary>
-            /// The originally shipped version of sample meshes provided by the XR Hands package, compatible with Meta Quest in OpenXR.
+            ///     The originally shipped version of sample meshes provided by the XR Hands package, compatible with Meta Quest in
+            ///     OpenXR.
             /// </summary>
             OpenXRMetaQuest,
 
             /// <summary>
-            /// The version of sample meshes that is meant for use with the Android XR runtime in OpenXR.
+            ///     The version of sample meshes that is meant for use with the Android XR runtime in OpenXR.
             /// </summary>
-            OpenXRAndroidXR,
+            OpenXRAndroidXR
         }
 #endif
 
-        [SerializeField]
-        [Tooltip("If this is enabled, this component will enable the Input System internal feature flag 'USE_OPTIMIZED_CONTROLS'. You must have at least version 1.5.0 of the Input System and have its backend enabled for this to take effect.")]
-        bool m_UseOptimizedControls;
-
-        [SerializeField, FormerlySerializedAs("m_LeftHandMesh")]
-        [Tooltip("References either a prefab or a GameObject in the scene that will be used to visualize the left hand.")]
-        GameObject m_MetaQuestLeftHandMesh;
-
-        [SerializeField, FormerlySerializedAs("m_RightHandMesh")]
-        [Tooltip("References either a prefab or a GameObject in the scene that will be used to visualize the right hand.")]
-        GameObject m_MetaQuestRightHandMesh;
+        private static readonly List<XRHandSubsystem> s_SubsystemsReuse = new();
 
         [SerializeField]
-        [Tooltip("References either a prefab or a GameObject in the scene that will be used to visualize the left hand.")]
-        GameObject m_AndroidXRLeftHandMesh;
+        [Tooltip(
+            "If this is enabled, this component will enable the Input System internal feature flag 'USE_OPTIMIZED_CONTROLS'. You must have at least version 1.5.0 of the Input System and have its backend enabled for this to take effect.")]
+        private bool m_UseOptimizedControls;
 
         [SerializeField]
-        [Tooltip("References either a prefab or a GameObject in the scene that will be used to visualize the right hand.")]
-        GameObject m_AndroidXRRightHandMesh;
+        [FormerlySerializedAs("m_LeftHandMesh")]
+        [Tooltip(
+            "References either a prefab or a GameObject in the scene that will be used to visualize the left hand.")]
+        private GameObject m_MetaQuestLeftHandMesh;
 
         [SerializeField]
-        [Tooltip("(Optional) If this is set, the hand meshes will be assigned this material.")]
-        Material m_HandMeshMaterial;
+        [FormerlySerializedAs("m_RightHandMesh")]
+        [Tooltip(
+            "References either a prefab or a GameObject in the scene that will be used to visualize the right hand.")]
+        private GameObject m_MetaQuestRightHandMesh;
 
         [SerializeField]
-        [Tooltip("Tells the Hand Visualizer to draw the meshes for the hands.")]
-        bool m_DrawMeshes;
-        bool m_PreviousDrawMeshes;
+        [Tooltip(
+            "References either a prefab or a GameObject in the scene that will be used to visualize the left hand.")]
+        private GameObject m_AndroidXRLeftHandMesh;
+
+        [SerializeField]
+        [Tooltip(
+            "References either a prefab or a GameObject in the scene that will be used to visualize the right hand.")]
+        private GameObject m_AndroidXRRightHandMesh;
+
+        [SerializeField] [Tooltip("(Optional) If this is set, the hand meshes will be assigned this material.")]
+        private Material m_HandMeshMaterial;
+
+        [SerializeField] [Tooltip("Tells the Hand Visualizer to draw the meshes for the hands.")]
+        private bool m_DrawMeshes;
+
+        [SerializeField] [Tooltip("The prefab that will be used to visualize the joints for debugging.")]
+        private GameObject m_DebugDrawPrefab;
+
+        [SerializeField] [Tooltip("Tells the Hand Visualizer to draw the debug joints for the hands.")]
+        private bool m_DebugDrawJoints;
+
+        [SerializeField] [Tooltip("Prefab to use for visualizing the velocity.")]
+        private GameObject m_VelocityPrefab;
+
+        [SerializeField] [Tooltip("The type of velocity to visualize.")]
+        private VelocityType m_VelocityType;
+
+        private HandGameObjects m_LeftHandGameObjects;
+        private bool m_PreviousDebugDrawJoints;
+        private bool m_PreviousDrawMeshes;
+        private VelocityType m_PreviousVelocityType;
+        private HandGameObjects m_RightHandGameObjects;
+
+        private XRHandSubsystem m_Subsystem;
 
         /// <summary>
-        /// Tells the Hand Visualizer to draw the meshes for the hands.
+        ///     Tells the Hand Visualizer to draw the meshes for the hands.
         /// </summary>
         public bool drawMeshes
         {
@@ -93,17 +120,8 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
             set => m_DrawMeshes = value;
         }
 
-        [SerializeField]
-        [Tooltip("The prefab that will be used to visualize the joints for debugging.")]
-        GameObject m_DebugDrawPrefab;
-
-        [SerializeField]
-        [Tooltip("Tells the Hand Visualizer to draw the debug joints for the hands.")]
-        bool m_DebugDrawJoints;
-        bool m_PreviousDebugDrawJoints;
-
         /// <summary>
-        /// Tells the Hand Visualizer to draw the debug joints for the hands.
+        ///     Tells the Hand Visualizer to draw the debug joints for the hands.
         /// </summary>
         public bool debugDrawJoints
         {
@@ -111,17 +129,8 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
             set => m_DebugDrawJoints = value;
         }
 
-        [SerializeField]
-        [Tooltip("Prefab to use for visualizing the velocity.")]
-        GameObject m_VelocityPrefab;
-
-        [SerializeField]
-        [Tooltip("The type of velocity to visualize.")]
-        VelocityType m_VelocityType;
-        VelocityType m_PreviousVelocityType;
-
         /// <summary>
-        /// The type of velocity to visualize.
+        ///     The type of velocity to visualize.
         /// </summary>
         public VelocityType velocityType
         {
@@ -129,14 +138,8 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
             set => m_VelocityType = value;
         }
 
-        XRHandSubsystem m_Subsystem;
-        HandGameObjects m_LeftHandGameObjects;
-        HandGameObjects m_RightHandGameObjects;
-
-        static readonly List<XRHandSubsystem> s_SubsystemsReuse = new List<XRHandSubsystem>();
-
         /// <summary>
-        /// See <see cref="MonoBehaviour"/>.
+        ///     See <see cref="MonoBehaviour" />.
         /// </summary>
         protected void Awake()
         {
@@ -147,54 +150,7 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
         }
 
         /// <summary>
-        /// See <see cref="MonoBehaviour"/>.
-        /// </summary>
-        protected void OnEnable()
-        {
-            if (m_Subsystem == null)
-                return;
-
-            UpdateRenderingVisibility(m_LeftHandGameObjects, m_Subsystem.leftHand.isTracked);
-            UpdateRenderingVisibility(m_RightHandGameObjects, m_Subsystem.rightHand.isTracked);
-        }
-
-        /// <summary>
-        /// See <see cref="MonoBehaviour"/>.
-        /// </summary>
-        protected void OnDisable()
-        {
-            if (m_Subsystem != null)
-            {
-                m_Subsystem.trackingAcquired -= OnTrackingAcquired;
-                m_Subsystem.trackingLost -= OnTrackingLost;
-                m_Subsystem.updatedHands -= OnUpdatedHands;
-                m_Subsystem = null;
-            }
-
-            UpdateRenderingVisibility(m_LeftHandGameObjects, false);
-            UpdateRenderingVisibility(m_RightHandGameObjects, false);
-        }
-
-        /// <summary>
-        /// See <see cref="MonoBehaviour"/>.
-        /// </summary>
-        protected void OnDestroy()
-        {
-            if (m_LeftHandGameObjects != null)
-            {
-                m_LeftHandGameObjects.OnDestroy();
-                m_LeftHandGameObjects = null;
-            }
-
-            if (m_RightHandGameObjects != null)
-            {
-                m_RightHandGameObjects.OnDestroy();
-                m_RightHandGameObjects = null;
-            }
-        }
-
-        /// <summary>
-        /// See <see cref="MonoBehaviour"/>.
+        ///     See <see cref="MonoBehaviour" />.
         /// </summary>
         protected void Update()
         {
@@ -232,7 +188,6 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
             }
 
             if (m_LeftHandGameObjects == null)
-            {
                 m_LeftHandGameObjects = new HandGameObjects(
                     Handedness.Left,
                     transform,
@@ -240,10 +195,8 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
                     m_HandMeshMaterial,
                     m_DebugDrawPrefab,
                     m_VelocityPrefab);
-            }
 
             if (m_RightHandGameObjects == null)
-            {
                 m_RightHandGameObjects = new HandGameObjects(
                     Handedness.Right,
                     transform,
@@ -251,7 +204,6 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
                     m_HandMeshMaterial,
                     m_DebugDrawPrefab,
                     m_VelocityPrefab);
-            }
 
             UpdateRenderingVisibility(m_LeftHandGameObjects, m_Subsystem.leftHand.isTracked);
             UpdateRenderingVisibility(m_RightHandGameObjects, m_Subsystem.rightHand.isTracked);
@@ -263,27 +215,69 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
             SubscribeHandSubsystem();
         }
 
-        XRDetectedHandMeshLayout GetProviderLayoutMesh()
+        /// <summary>
+        ///     See <see cref="MonoBehaviour" />.
+        /// </summary>
+        protected void OnEnable()
+        {
+            if (m_Subsystem == null)
+                return;
+
+            UpdateRenderingVisibility(m_LeftHandGameObjects, m_Subsystem.leftHand.isTracked);
+            UpdateRenderingVisibility(m_RightHandGameObjects, m_Subsystem.rightHand.isTracked);
+        }
+
+        /// <summary>
+        ///     See <see cref="MonoBehaviour" />.
+        /// </summary>
+        protected void OnDisable()
+        {
+            if (m_Subsystem != null)
+            {
+                m_Subsystem.trackingAcquired -= OnTrackingAcquired;
+                m_Subsystem.trackingLost -= OnTrackingLost;
+                m_Subsystem.updatedHands -= OnUpdatedHands;
+                m_Subsystem = null;
+            }
+
+            UpdateRenderingVisibility(m_LeftHandGameObjects, false);
+            UpdateRenderingVisibility(m_RightHandGameObjects, false);
+        }
+
+        /// <summary>
+        ///     See <see cref="MonoBehaviour" />.
+        /// </summary>
+        protected void OnDestroy()
+        {
+            if (m_LeftHandGameObjects != null)
+            {
+                m_LeftHandGameObjects.OnDestroy();
+                m_LeftHandGameObjects = null;
+            }
+
+            if (m_RightHandGameObjects != null)
+            {
+                m_RightHandGameObjects.OnDestroy();
+                m_RightHandGameObjects = null;
+            }
+        }
+
+        private XRDetectedHandMeshLayout GetProviderLayoutMesh()
         {
 #if XRHANDS_1_6_0
             return m_Subsystem.detectedHandMeshLayout;
 #elif OPENXR_AVAILABLE
             var openXRRuntimeName = OpenXRRuntime.name;
             if (openXRRuntimeName == "Oculus")
-            {
                 return XRDetectedHandMeshLayout.OpenXRMetaQuest;
-            }
-            else if (openXRRuntimeName == "Android XR")
-            {
-                return XRDetectedHandMeshLayout.OpenXRAndroidXR;
-            }
+            if (openXRRuntimeName == "Android XR") return XRDetectedHandMeshLayout.OpenXRAndroidXR;
             return XRDetectedHandMeshLayout.Unknown;
 #else
             return XRDetectedHandMeshLayout.Unknown;
 #endif
         }
 
-        void SubscribeHandSubsystem()
+        private void SubscribeHandSubsystem()
         {
             if (m_Subsystem == null)
                 return;
@@ -293,7 +287,7 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
             m_Subsystem.updatedHands += OnUpdatedHands;
         }
 
-        void UnsubscribeHandSubsystem()
+        private void UnsubscribeHandSubsystem()
         {
             if (m_Subsystem == null)
                 return;
@@ -303,7 +297,7 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
             m_Subsystem.updatedHands -= OnUpdatedHands;
         }
 
-        void UpdateRenderingVisibility(HandGameObjects handGameObjects, bool isTracked)
+        private void UpdateRenderingVisibility(HandGameObjects handGameObjects, bool isTracked)
         {
             if (handGameObjects == null)
                 return;
@@ -313,7 +307,7 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
             handGameObjects.SetVelocityType(isTracked ? m_VelocityType : VelocityType.None);
         }
 
-        void OnTrackingAcquired(XRHand hand)
+        private void OnTrackingAcquired(XRHand hand)
         {
             switch (hand.handedness)
             {
@@ -327,7 +321,7 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
             }
         }
 
-        void OnTrackingLost(XRHand hand)
+        private void OnTrackingLost(XRHand hand)
         {
             switch (hand.handedness)
             {
@@ -341,7 +335,8 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
             }
         }
 
-        void OnUpdatedHands(XRHandSubsystem subsystem, XRHandSubsystem.UpdateSuccessFlags updateSuccessFlags, XRHandSubsystem.UpdateType updateType)
+        private void OnUpdatedHands(XRHandSubsystem subsystem, XRHandSubsystem.UpdateSuccessFlags updateSuccessFlags,
+            XRHandSubsystem.UpdateType updateType)
         {
             // We have no game logic depending on the Transforms, so early out here
             // (add game logic before this return here, directly querying from
@@ -349,8 +344,8 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
             if (updateType == XRHandSubsystem.UpdateType.Dynamic)
                 return;
 
-            bool leftHandTracked = subsystem.leftHand.isTracked;
-            bool rightHandTracked = subsystem.rightHand.isTracked;
+            var leftHandTracked = subsystem.leftHand.isTracked;
+            var rightHandTracked = subsystem.rightHand.isTracked;
 
             if (m_PreviousDrawMeshes != m_DrawMeshes)
             {
@@ -386,19 +381,22 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
                 m_VelocityType);
         }
 
-        class HandGameObjects
+        private class HandGameObjects
         {
-            GameObject m_HandRoot;
-            GameObject m_DrawJointsParent;
+            private const float k_LineWidth = 0.005f;
 
-            GameObject[] m_DrawJoints = new GameObject[XRHandJointID.EndMarker.ToIndex()];
-            GameObject[] m_VelocityParents = new GameObject[XRHandJointID.EndMarker.ToIndex()];
-            LineRenderer[] m_Lines = new LineRenderer[XRHandJointID.EndMarker.ToIndex()];
-            JointVisualizer[] m_JointVisualizers = new JointVisualizer[XRHandJointID.EndMarker.ToIndex()];
+            private static readonly Vector3[] s_LinePointsReuse = new Vector3[2];
 
-            static Vector3[] s_LinePointsReuse = new Vector3[2];
-            XRHandMeshController m_MeshController;
-            const float k_LineWidth = 0.005f;
+            private readonly GameObject[] m_DrawJoints = new GameObject[XRHandJointID.EndMarker.ToIndex()];
+            private GameObject m_DrawJointsParent;
+            private GameObject m_HandRoot;
+
+            private readonly JointVisualizer[] m_JointVisualizers =
+                new JointVisualizer[XRHandJointID.EndMarker.ToIndex()];
+
+            private readonly LineRenderer[] m_Lines = new LineRenderer[XRHandJointID.EndMarker.ToIndex()];
+            private readonly XRHandMeshController m_MeshController;
+            private readonly GameObject[] m_VelocityParents = new GameObject[XRHandJointID.EndMarker.ToIndex()];
 
             public HandGameObjects(
                 Handedness handedness,
@@ -432,7 +430,8 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
 
                 var isSceneObject = meshPrefab.scene.IsValid();
                 m_HandRoot = isSceneObject ? meshPrefab : Instantiate(meshPrefab, parent);
-                m_HandRoot.SetActive(false); // Deactivate so that added components do not run OnEnable before they are finished being set up
+                m_HandRoot.SetActive(
+                    false); // Deactivate so that added components do not run OnEnable before they are finished being set up
 
                 m_HandRoot.transform.localPosition = Vector3.zero;
                 m_HandRoot.transform.localRotation = Quaternion.identity;
@@ -459,10 +458,7 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
                     m_MeshController.handTrackingEvents = handEvents;
                 }
 
-                if (meshMaterial != null)
-                {
-                    m_MeshController.handMeshRenderer.sharedMaterial = meshMaterial;
-                }
+                if (meshMaterial != null) m_MeshController.handMeshRenderer.sharedMaterial = meshMaterial;
 
                 var skeletonDriver = m_HandRoot.GetComponent<XRHandSkeletonDriver>();
                 if (skeletonDriver == null)
@@ -530,7 +526,7 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
 
             public void ToggleDebugDrawJoints(bool debugDrawJoints)
             {
-                for (int jointIndex = 0; jointIndex < m_DrawJoints.Length; ++jointIndex)
+                for (var jointIndex = 0; jointIndex < m_DrawJoints.Length; ++jointIndex)
                 {
                     ToggleRenderers<MeshRenderer>(debugDrawJoints, m_DrawJoints[jointIndex].transform);
                     m_Lines[jointIndex].enabled = debugDrawJoints;
@@ -541,8 +537,9 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
 
             public void SetVelocityType(VelocityType velocityType)
             {
-                for (int jointIndex = 0; jointIndex < m_VelocityParents.Length; ++jointIndex)
-                    ToggleRenderers<LineRenderer>(velocityType != VelocityType.None, m_VelocityParents[jointIndex].transform);
+                for (var jointIndex = 0; jointIndex < m_VelocityParents.Length; ++jointIndex)
+                    ToggleRenderers<LineRenderer>(velocityType != VelocityType.None,
+                        m_VelocityParents[jointIndex].transform);
             }
 
             public void UpdateJoints(
@@ -556,12 +553,14 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
 
                 var wristPose = Pose.identity;
                 var parentIndex = XRHandJointID.Wrist.ToIndex();
-                UpdateJoint(debugDrawJoints, velocityType, hand.GetJoint(XRHandJointID.Wrist), ref wristPose, ref parentIndex);
-                UpdateJoint(debugDrawJoints, velocityType, hand.GetJoint(XRHandJointID.Palm), ref wristPose, ref parentIndex, false);
+                UpdateJoint(debugDrawJoints, velocityType, hand.GetJoint(XRHandJointID.Wrist), ref wristPose,
+                    ref parentIndex);
+                UpdateJoint(debugDrawJoints, velocityType, hand.GetJoint(XRHandJointID.Palm), ref wristPose,
+                    ref parentIndex, false);
 
                 for (var fingerIndex = (int)XRHandFingerID.Thumb;
-                    fingerIndex <= (int)XRHandFingerID.Little;
-                    ++fingerIndex)
+                     fingerIndex <= (int)XRHandFingerID.Little;
+                     ++fingerIndex)
                 {
                     var parentPose = wristPose;
                     var fingerId = (XRHandFingerID)fingerIndex;
@@ -569,15 +568,14 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
 
                     var jointIndexBack = fingerId.GetBackJointID().ToIndex();
                     for (var jointIndex = fingerId.GetFrontJointID().ToIndex();
-                        jointIndex <= jointIndexBack;
-                        ++jointIndex)
-                    {
-                        UpdateJoint(debugDrawJoints, velocityType, hand.GetJoint(XRHandJointIDUtility.FromIndex(jointIndex)), ref parentPose, ref parentIndex);
-                    }
+                         jointIndex <= jointIndexBack;
+                         ++jointIndex)
+                        UpdateJoint(debugDrawJoints, velocityType,
+                            hand.GetJoint(XRHandJointIDUtility.FromIndex(jointIndex)), ref parentPose, ref parentIndex);
                 }
             }
 
-            void UpdateJoint(
+            private void UpdateJoint(
                 bool debugDrawJoints,
                 VelocityType velocityType,
                 XRHandJoint joint,
@@ -610,7 +608,8 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
                     parentIndex = jointIndex;
                 }
 
-                if (velocityType != VelocityType.None && m_VelocityParents[jointIndex].TryGetComponent<LineRenderer>(out var renderer))
+                if (velocityType != VelocityType.None &&
+                    m_VelocityParents[jointIndex].TryGetComponent<LineRenderer>(out var renderer))
                 {
                     m_VelocityParents[jointIndex].transform.localPosition = Vector3.zero;
                     m_VelocityParents[jointIndex].transform.localRotation = Quaternion.identity;
@@ -631,7 +630,7 @@ namespace UnityEngine.XR.Hands.Samples.VisualizerSample
                 }
             }
 
-            static void ToggleRenderers<TRenderer>(bool toggle, Transform rendererTransform)
+            private static void ToggleRenderers<TRenderer>(bool toggle, Transform rendererTransform)
                 where TRenderer : Renderer
             {
                 if (rendererTransform.TryGetComponent<TRenderer>(out var renderer))

@@ -1,46 +1,49 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEditor.EditorTools;
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace Vertigo2
 {
     /// <summary>
-    /// An object that should interact with water.
+    ///     An object that should interact with water.
     /// </summary>
     [RequireComponent(typeof(Rigidbody))]
     public class VWaterBody : MonoBehaviour
     {
         [Tooltip("Collider to use for water physics")]
         public Collider mainCollider;
+
         private float colliderSize;
 
-        [Tooltip("Toggle water physics")]
-        public bool applyWaterPhysics = true;
+        [Tooltip("Toggle water physics")] public bool applyWaterPhysics = true;
+
         [Tooltip("Density of this object. Densities >1 will sink, <1 will float.")]
         public float density = 1;
-        [Tooltip("Strength of water drag")]
-        public float dragMultiplier = 1f;
+
+        [Tooltip("Strength of water drag")] public float dragMultiplier = 1f;
+
         [Tooltip("Strength of angular water drag")]
         public float angularDragMultiplier = 1f;
-        [Range(0,1), Tooltip("Quadratic drag acts on the square of the velocity")]
+
+        [Range(0, 1)] [Tooltip("Quadratic drag acts on the square of the velocity")]
         public float quadraticDragFactor = 1f;
 
         [Tooltip("Direction of center of buoyancy. Larger vectors will upright the object more strongly")]
         public Vector3 buoyantDirection = Vector3.up;
 
-        [Space()]
+        [Space]
         [Tooltip("Optionally adds ripples to the water wave simulation. You can leave this null for small objects")]
         public WaterDynamicFlowSource wake;
+
         public float wakeStrength = 2f;
 
-        [Space()]
-
-        [Tooltip("Rigidbodies have water physics applied automatically. Generic bodies can be used for animated objects that should splash when they enter water.")]
+        [Space]
+        [Tooltip(
+            "Rigidbodies have water physics applied automatically. Generic bodies can be used for animated objects that should splash when they enter water.")]
         public BodyTypes bodyType;
+
         public enum BodyTypes
         {
             Rigidbody,
+
             //Character,
             Generic
         }
@@ -49,36 +52,34 @@ namespace Vertigo2
         public bool ignoreMasks;
 
 
-        [HideInInspector]
-        public VWaterBase currentWater;
-        
+        [HideInInspector] public VWaterBase currentWater;
+
         //timer to forget water
-        int waterTimer;
+        private int waterTimer;
 
         public delegate void WaterEvent(VWaterBase w);
+
         public event WaterEvent OnEnterWater;
         public event WaterEvent OnExitWater;
 
         // water masks, eg inside a boat, make it so we shouldn't interact with water
-        [HideInInspector]
-        public bool touchingWaterMask = false;
+        [HideInInspector] public bool touchingWaterMask;
 
-        Rigidbody rb;
+        private Rigidbody rb;
+
         //Player.VertigoCharacterController character;
-        VelocityEst velocityEstimator;
+        private VelocityEst velocityEstimator;
 
         /// <summary>
-        /// a velocity to offset drag force, e.g. to stop swimming characters from being slowed down
+        ///     a velocity to offset drag force, e.g. to stop swimming characters from being slowed down
         /// </summary>
         [HideInInspector] public Vector3 swimVelocity;
+
         public float submersion { get; private set; }
 
-        [HideInInspector]
-        public float waterHeight;
-        [HideInInspector]
-        public Vector3 waterNormal;
-        [HideInInspector]
-        public Vector3 waterVelocity;
+        [HideInInspector] public float waterHeight;
+        [HideInInspector] public Vector3 waterNormal;
+        [HideInInspector] public Vector3 waterVelocity;
 
 #if CREST_WATER
         Crest.SampleHeightHelper _sampleHeightHelper = new Crest.SampleHeightHelper();
@@ -93,10 +94,10 @@ namespace Vertigo2
                     //case (BodyTypes.Character):
                     //    return character.motor.Velocity;
 
-                    case (BodyTypes.Rigidbody):
+                    case BodyTypes.Rigidbody:
                         return rb.velocity;
 
-                    case (BodyTypes.Generic):
+                    case BodyTypes.Generic:
                         return velocityEstimator.GetVelocityEstimate();
 
                     default:
@@ -105,26 +106,17 @@ namespace Vertigo2
             }
         }
 
-        public Vector3 buoyantForce
-        {
-            get
-            {
-                return (transform.rotation * buoyantDirection) * Mathf.Clamp01(50 * submersion) * (1 - submersion);
-            }
-        }
+        public Vector3 buoyantForce =>
+            transform.rotation * buoyantDirection * Mathf.Clamp01(50 * submersion) * (1 - submersion);
 
         public bool inWater => m_inWater && !touchingWaterMask;
         private bool m_inWater;
 
-        [HideInInspector]
-        public float lastSplashedTime;
+        [HideInInspector] public float lastSplashedTime;
 
-        void Awake()
+        private void Awake()
         {
-            if (bodyType == BodyTypes.Rigidbody)
-            {
-                rb = GetComponent<Rigidbody>();
-            }
+            if (bodyType == BodyTypes.Rigidbody) rb = GetComponent<Rigidbody>();
             //if (bodyType == BodyTypes.Character)
             //{
             //    character = GetComponent<Player.VertigoCharacterController>();
@@ -141,6 +133,7 @@ namespace Vertigo2
                 mainCollider = GetComponent<Collider>();
                 if (mainCollider == null) mainCollider = GetComponentInChildren<Collider>();
             }
+
             colliderSize = mainCollider.bounds.size.magnitude;
         }
 
@@ -153,10 +146,7 @@ namespace Vertigo2
         {
             m_inWater = false;
 
-            if (bodyType == BodyTypes.Generic && velocityEstimator != null)
-            {
-                velocityEstimator.BeginEstimatingVelocity();
-            }
+            if (bodyType == BodyTypes.Generic && velocityEstimator != null) velocityEstimator.BeginEstimatingVelocity();
         }
 
         private void Update()
@@ -165,10 +155,8 @@ namespace Vertigo2
             {
                 waterTimer--;
                 if (waterTimer < 0)
-                {
                     //water timer has run out, something has gone wrong and we're definitely out of the water.
                     currentWater.ForceBodyExit(this);
-                }
 
                 if (currentWater == null)
                 {
@@ -185,14 +173,23 @@ namespace Vertigo2
                         wake.enabled = true;
                         wake.amplitude = -Mathf.Clamp(velocity.magnitude, 0, 10) * 0.2f * wakeStrength;
                     }
-                    else wake.enabled = false;
+                    else
+                    {
+                        wake.enabled = false;
+                    }
                 }
-                else if (wake != null) wake.enabled = false;
+                else if (wake != null)
+                {
+                    wake.enabled = false;
+                }
             }
-            else if (wake != null) wake.enabled = false;
+            else if (wake != null)
+            {
+                wake.enabled = false;
+            }
         }
 
-        bool useGravity
+        private bool useGravity
         {
             get
             {
@@ -221,59 +218,63 @@ namespace Vertigo2
 #endif
         }
 
-        const float dragCoefficient = 1.5f;
-        const float quadraticDragCoefficient = 4f;
-        float CalculateDrag(float multiplier, float speed)
+        private const float dragCoefficient = 1.5f;
+        private const float quadraticDragCoefficient = 4f;
+
+        private float CalculateDrag(float multiplier, float speed)
         {
-            return 1 - Mathf.Exp(-(currentWater.viscosity * dragCoefficient * submersion * multiplier * Mathf.Lerp(1, speed / quadraticDragCoefficient, quadraticDragFactor)) * Time.fixedDeltaTime);
+            return 1 - Mathf.Exp(-(currentWater.viscosity * dragCoefficient * submersion * multiplier *
+                                   Mathf.Lerp(1, speed / quadraticDragCoefficient, quadraticDragFactor)) *
+                                 Time.fixedDeltaTime);
         }
+
         private void FixedUpdate()
         {
             UpdateWaterInfo();
 
             if (applyWaterPhysics)
-            {
                 if (inWater)
                 {
                     if (useGravity)
                     {
-                        float upforce = submersion / density;
+                        var upforce = submersion / density;
                         AddVelocity(-Physics.gravity * upforce * Time.fixedDeltaTime);
                     }
 
                     if (bodyType == BodyTypes.Rigidbody)
                     {
                         // advanced drag
-                        Vector3 dragPosition = rb.worldCenterOfMass;
-                        Vector3 relativeVelocity = rb.velocity - waterVelocity - swimVelocity;
-                        if(submersion < 1)
+                        var dragPosition = rb.worldCenterOfMass;
+                        var relativeVelocity = rb.velocity - waterVelocity - swimVelocity;
+                        if (submersion < 1)
                         {
                             dragPosition.y = Mathf.Min(dragPosition.y, waterHeight);
                             relativeVelocity = rb.GetPointVelocity(dragPosition);
                         }
-                        float drag = CalculateDrag(dragMultiplier, relativeVelocity.magnitude);
-                        Vector3 dragForce = -relativeVelocity * drag;
+
+                        var drag = CalculateDrag(dragMultiplier, relativeVelocity.magnitude);
+                        var dragForce = -relativeVelocity * drag;
                         rb.AddForceAtPosition(dragForce, dragPosition, ForceMode.VelocityChange);
 
-                        float angDrag = CalculateDrag(angularDragMultiplier, rb.angularVelocity.magnitude);
+                        var angDrag = CalculateDrag(angularDragMultiplier, rb.angularVelocity.magnitude);
                         rb.angularVelocity -= rb.angularVelocity * angDrag;
 
                         // buoyant torque
                         if (buoyantDirection != Vector3.zero)
                         {
-                            float buoy = 5f;
+                            var buoy = 5f;
                             rb.AddForce(-waterNormal * buoy, ForceMode.Acceleration);
-                            rb.AddForceAtPosition(waterNormal * buoy, transform.position + buoyantForce, ForceMode.Acceleration);
+                            rb.AddForceAtPosition(waterNormal * buoy, transform.position + buoyantForce,
+                                ForceMode.Acceleration);
                         }
                     }
                     else
                     {
                         // basic drag
-                        Vector3 relativeVelocity = velocity - waterVelocity - swimVelocity;
+                        var relativeVelocity = velocity - waterVelocity - swimVelocity;
                         AddVelocity(-relativeVelocity * CalculateDrag(dragMultiplier, relativeVelocity.magnitude));
                     }
                 }
-            }
         }
 
 #if CREST_WATER
@@ -315,7 +316,8 @@ namespace Vertigo2
                 float velDepth = (currentWater as CrestWater).surfaceVelocityDepth;
                 if (velDepth > 0)
                 {
-                    float velocityFalloff = Mathf.InverseLerp(waterHeight - velDepth, waterHeight, mainCollider.bounds.max.y);
+                    float velocityFalloff =
+ Mathf.InverseLerp(waterHeight - velDepth, waterHeight, mainCollider.bounds.max.y);
                     waterVelocity *= velocityFalloff;
                 }
             }
@@ -327,34 +329,31 @@ namespace Vertigo2
 
         public Vector3 VectorPow(Vector3 vec, float pow)
         {
-            float mag = vec.magnitude;
+            var mag = vec.magnitude;
             return vec.normalized * Mathf.Pow(mag, pow);
         }
 
-        float CalculateSubmersion()
+        private float CalculateSubmersion()
         {
             if (currentWater == null) return 0; //not in water
 
-            Vector3 com = mainCollider.bounds.center;
-            Vector3 ext = mainCollider.bounds.extents;
+            var com = mainCollider.bounds.center;
+            var ext = mainCollider.bounds.extents;
             //average extents to get rough radius
-            float radius = (Mathf.Abs(ext.x) + Mathf.Abs(ext.y) + Mathf.Abs(ext.z)) / 3;
+            var radius = (Mathf.Abs(ext.x) + Mathf.Abs(ext.y) + Mathf.Abs(ext.z)) / 3;
             //approximate sphere volume submersion
-            float submersion = Mathf.SmoothStep(0, 1, (waterHeight - (com.y - ext.y)) / (2 * ext.y));
+            var submersion = Mathf.SmoothStep(0, 1, (waterHeight - (com.y - ext.y)) / (2 * ext.y));
 
             return submersion;
         }
 
-        const int waterTimerVal = 10; // how long to forget water
+        private const int waterTimerVal = 10; // how long to forget water
 
 
         private void OnTriggerEnter(Collider other)
         {
-            VWaterBase w = other.GetComponent<VWaterBase>();
-            if (w != null)
-            {
-                w.EnterWater(this);
-            }
+            var w = other.GetComponent<VWaterBase>();
+            if (w != null) w.EnterWater(this);
         }
 
         public void EnterWater(VWaterBase water)
@@ -379,10 +378,7 @@ namespace Vertigo2
 
         public void ExitWater(VWaterBase water)
         {
-            if(currentWater != null)
-            {
-                OnExitWater?.Invoke(water);
-            }
+            if (currentWater != null) OnExitWater?.Invoke(water);
 
             currentWater = null;
             m_inWater = false;
@@ -392,6 +388,7 @@ namespace Vertigo2
         {
             if (!ignoreMasks) touchingWaterMask = true;
         }
+
         public void ExitWaterMask()
         {
             if (!ignoreMasks) touchingWaterMask = false;
@@ -410,11 +407,7 @@ namespace Vertigo2
                 }
             }*/
 
-            if (bodyType == BodyTypes.Rigidbody)
-            {
-                rb.velocity += vel;
-            }
+            if (bodyType == BodyTypes.Rigidbody) rb.velocity += vel;
         }
-
     }
 }

@@ -1,32 +1,75 @@
-﻿using UnityEngine;
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace TazoScript
 {
     public class AnimateTiledTextureOnTrail : MonoBehaviour
     {
-        public int _columns = 2;                        // The number of columns of the texture
-        public int _rows = 2;                           // The number of rows of the texture
-        public Vector2 _scale = new Vector3(1f, 1f);    // Scale the texture. This must be a non-zero number. negative scale flips the image
-        public Vector2 _offset = Vector2.zero;          // You can use this if you do not want the texture centered. (These are very small numbers .001)
-        public Vector2 _buffer = Vector2.zero;          // You can use this to buffer frames to hide unwanted grid lines or artifacts
-        public float _framesPerSecond = 10f;            // Frames per second that you want to texture to play at
-        public bool _playOnce = false;                  // Enable this if you want the animation to only play one time
-        public bool _disableUponCompletion = false;     // Enable this if you want the texture to disable the renderer when it is finished playing
-        public bool _enableEvents = false;              // Enable this if you want to register an event that fires when the animation is finished playing
-        public bool _playOnEnable = true;               // The animation will play when the object is enabled
-        public bool _newMaterialInstance = false;       // Set this to true if you want to create a new material instance
+        public delegate void VoidEvent(); // The Event delegate
 
-        private int _index = 0;                         // Keeps track of the current frame 
-        private Vector2 _textureSize = Vector2.zero;    // Keeps track of the texture scale 
-        private Material _materialInstance = null;      // Material instance of the material we create (if needed)
-        private bool _hasMaterialInstance = false;      // A flag so we know if we have a material instance we need to clean up (better than a null check i think)
-        private bool _isPlaying = false;                // A flag to determine if the animation is currently playing
+        public int _columns = 2; // The number of columns of the texture
+        public int _rows = 2; // The number of rows of the texture
 
+        public Vector2
+            _scale = new Vector3(1f,
+                1f); // Scale the texture. This must be a non-zero number. negative scale flips the image
 
-        public delegate void VoidEvent();               // The Event delegate
+        public Vector2
+            _offset = Vector2
+                .zero; // You can use this if you do not want the texture centered. (These are very small numbers .001)
+
+        public Vector2
+            _buffer = Vector2.zero; // You can use this to buffer frames to hide unwanted grid lines or artifacts
+
+        public float _framesPerSecond = 10f; // Frames per second that you want to texture to play at
+        public bool _playOnce; // Enable this if you want the animation to only play one time
+
+        public bool
+            _disableUponCompletion; // Enable this if you want the texture to disable the renderer when it is finished playing
+
+        public bool
+            _enableEvents; // Enable this if you want to register an event that fires when the animation is finished playing
+
+        public bool _playOnEnable = true; // The animation will play when the object is enabled
+        public bool _newMaterialInstance; // Set this to true if you want to create a new material instance
+
+        private bool
+            _hasMaterialInstance; // A flag so we know if we have a material instance we need to clean up (better than a null check i think)
+
+        private int _index; // Keeps track of the current frame 
+        private bool _isPlaying; // A flag to determine if the animation is currently playing
+        private Material _materialInstance; // Material instance of the material we create (if needed)
+        private Vector2 _textureSize = Vector2.zero; // Keeps track of the texture scale 
         private List<VoidEvent> _voidEventCallbackList; // A list of functions we need to call if events are enabled
+
+        private void Awake()
+        {
+            // Allocate memory for the events, if needed
+            if (_enableEvents)
+                _voidEventCallbackList = new List<VoidEvent>();
+
+            //Create the material instance, if needed. else, just use this function to recalc the texture size
+            ChangeMaterial(GetComponent<TrailRenderer>().sharedMaterial, _newMaterialInstance);
+        }
+
+        private void OnEnable()
+        {
+            CalcTextureSize();
+
+            if (_playOnEnable)
+                Play();
+        }
+
+        private void OnDestroy()
+        {
+            // If we wanted new material instances, we need to destroy the material
+            if (_hasMaterialInstance)
+            {
+                Destroy(GetComponent<TrailRenderer>().sharedMaterial);
+                _hasMaterialInstance = false;
+            }
+        }
 
         // Use this function to register your callback function with this script
         public void RegisterCallback(VoidEvent cbFunction)
@@ -35,7 +78,8 @@ namespace TazoScript
             if (_enableEvents)
                 _voidEventCallbackList.Add(cbFunction);
             else
-                Debug.LogWarning("AnimateTiledTextureOnTrail: You are attempting to register a callback but the events of this object are not enabled!");
+                Debug.LogWarning(
+                    "AnimateTiledTextureOnTrail: You are attempting to register a callback but the events of this object are not enabled!");
         }
 
         // Use this function to unregister a callback function with this script
@@ -45,7 +89,8 @@ namespace TazoScript
             if (_enableEvents)
                 _voidEventCallbackList.Remove(cbFunction);
             else
-                Debug.LogWarning("AnimateTiledTextureOnTrail: You are attempting to un-register a callback but the events of this object are not enabled!");
+                Debug.LogWarning(
+                    "AnimateTiledTextureOnTrail: You are attempting to un-register a callback but the events of this object are not enabled!");
         }
 
         public void Play()
@@ -56,6 +101,7 @@ namespace TazoScript
                 StopCoroutine("updateTiling");
                 _isPlaying = false;
             }
+
             // Make sure the renderer is enabled
             GetComponent<TrailRenderer>().enabled = true;
 
@@ -73,7 +119,7 @@ namespace TazoScript
                 // First check our material instance, if we already have a material instance
                 // and we want to create a new one, we need to clean up the old one
                 if (_hasMaterialInstance)
-                    Object.Destroy(GetComponent<TrailRenderer>().sharedMaterial);
+                    Destroy(GetComponent<TrailRenderer>().sharedMaterial);
 
                 // create the new material
                 _materialInstance = new Material(newMaterial);
@@ -85,7 +131,9 @@ namespace TazoScript
                 _hasMaterialInstance = true;
             }
             else // if we dont have create a new instance, just assign the texture
+            {
                 GetComponent<TrailRenderer>().sharedMaterial = newMaterial;
+            }
 
             // We need to recalc the texture size (since different material = possible different texture)
             CalcTextureSize();
@@ -94,41 +142,12 @@ namespace TazoScript
             GetComponent<TrailRenderer>().sharedMaterial.SetTextureScale("_MainTex", _textureSize);
         }
 
-        private void Awake()
-        {
-            // Allocate memory for the events, if needed
-            if (_enableEvents)
-                _voidEventCallbackList = new List<VoidEvent>();
-
-            //Create the material instance, if needed. else, just use this function to recalc the texture size
-            ChangeMaterial(GetComponent<TrailRenderer>().sharedMaterial, _newMaterialInstance);
-        }
-
-        private void OnDestroy()
-        {
-            // If we wanted new material instances, we need to destroy the material
-            if (_hasMaterialInstance)
-            {
-                Object.Destroy(GetComponent<TrailRenderer>().sharedMaterial);
-                _hasMaterialInstance = false;
-            }
-        }
-
         // Handles all event triggers to callback functions
         private void HandleCallbacks(List<VoidEvent> cbList)
         {
             // For now simply loop through them all and call yet.
-            for (int i = 0; i < cbList.Count; ++i)
+            for (var i = 0; i < cbList.Count; ++i)
                 cbList[i]();
-        }
-
-        private void OnEnable()
-        {
-
-            CalcTextureSize();
-
-            if (_playOnEnable)
-                Play();
         }
 
         private void CalcTextureSize()
@@ -150,14 +169,14 @@ namespace TazoScript
             _isPlaying = true;
 
             // This is the max number of frames
-            int checkAgainst = (_rows * _columns);
+            var checkAgainst = _rows * _columns;
 
             while (true)
             {
                 // If we are at the last frame, we need to either loop or break out of the loop
                 if (_index >= checkAgainst)
                 {
-                    _index = 0;  // Reset the index
+                    _index = 0; // Reset the index
 
                     // If we only want to play the texture one time
                     if (_playOnce)
@@ -177,10 +196,9 @@ namespace TazoScript
                             // Break out of the loop, we are finished
                             yield break;
                         }
-                        else
-                            checkAgainst = _columns;    // We need to loop through one more row
-                    }
 
+                        checkAgainst = _columns; // We need to loop through one more row
+                    }
                 }
 
                 // Apply the offset in order to move to the next frame
@@ -197,16 +215,16 @@ namespace TazoScript
         private void ApplyOffset()
         {
             //split into x and y indexes. calculate the new offsets
-            Vector2 offset = new Vector2((float)_index / _columns - (_index / _columns), //x index
-                                          1 - ((_index / _columns) / (float)_rows));    //y index
+            var offset = new Vector2((float)_index / _columns - _index / _columns, //x index
+                1 - _index / _columns / (float)_rows); //y index
 
             // Reset the y offset, if needed
             if (offset.y == 1)
                 offset.y = 0.0f;
 
             // If we have scaled the texture, we need to reposition the texture to the center of the object
-            offset.x += ((1f / _columns) - _textureSize.x) / 2.0f;
-            offset.y += ((1f / _rows) - _textureSize.y) / 2.0f;
+            offset.x += (1f / _columns - _textureSize.x) / 2.0f;
+            offset.y += (1f / _rows - _textureSize.y) / 2.0f;
 
             // Add an additional offset if the user does not want the texture centered
             offset.x += _offset.x;

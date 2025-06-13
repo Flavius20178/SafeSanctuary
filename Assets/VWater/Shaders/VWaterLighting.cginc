@@ -1,8 +1,6 @@
 // Upgrade NOTE: replaced 'defined UNITY_LIGHT_ATTENUATION' with 'defined (UNITY_LIGHT_ATTENUATION)'
 
 
-
-
 //#include "UnityCG.cginc"
 #include "AutoLight.cginc"
 //#include "Lighting.cginc"
@@ -20,7 +18,7 @@ struct v2f
     UNITY_LIGHTING_COORDS(6, 7)
 
     float4 screenPos : TEXCOORD8;
-    
+
     UNITY_VERTEX_INPUT_INSTANCE_ID
     UNITY_VERTEX_OUTPUT_STEREO
 };
@@ -52,8 +50,8 @@ float2 _WaveBufferWorldPos;
 #endif
 
 UNITY_INSTANCING_BUFFER_START(Props)
-UNITY_DEFINE_INSTANCED_PROP(fixed4, _LightingColor)
-UNITY_DEFINE_INSTANCED_PROP(half2, _Flow)
+    UNITY_DEFINE_INSTANCED_PROP(fixed4, _LightingColor)
+    UNITY_DEFINE_INSTANCED_PROP(half2, _Flow)
 UNITY_INSTANCING_BUFFER_END(Props)
 
 
@@ -89,21 +87,22 @@ UNITY_DECLARE_SCREENSPACE_TEXTURE(_WaterGrab);
 
 struct SurfaceOutputWater
 {
-    fixed3 Albedo;      // base (diffuse or specular) color
-    fixed3 Normal;      // tangent space normal, if written
-    half Smoothness;    // 0=rough, 1=smooth
-    half Specular; 
-    fixed3 Scattering;   // light scattering color
+    fixed3 Albedo; // base (diffuse or specular) color
+    fixed3 Normal; // tangent space normal, if written
+    half Smoothness; // 0=rough, 1=smooth
+    half Specular;
+    fixed3 Scattering; // light scattering color
 };
 
-UnityLight CreateLight(v2f i) {
+UnityLight CreateLight(v2f i)
+{
     UnityLight light;
 
-#if defined(POINT) || defined(SPOT) || defined(POINT_COOKIE)
+    #if defined(POINT) || defined(SPOT) || defined(POINT_COOKIE)
     light.dir = normalize(_WorldSpaceLightPos0.xyz - i.worldPos);
-#else
+    #else
     light.dir = _WorldSpaceLightPos0.xyz;
-#endif
+    #endif
     UNITY_LIGHT_ATTENUATION(attenuation, 0, i.worldPos);
     light.color = _LightColor0.rgb * attenuation;
     light.ndotl = DotClamped(i.worldNormal, light.dir);
@@ -113,10 +112,10 @@ UnityLight CreateLight(v2f i) {
 float3 BoxProjection(
     float3 direction, float3 position,
     float4 cubemapPosition, float3 boxMin, float3 boxMax
-) 
+)
 {
     UNITY_BRANCH
-    if (cubemapPosition.w > 0) 
+    if (cubemapPosition.w > 0)
     {
         float3 factors = ((direction > 0 ? boxMax : boxMin) - position) / direction;
         float scalar = min(min(factors.x, factors.y), factors.z);
@@ -125,16 +124,17 @@ float3 BoxProjection(
     return direction;
 }
 
-UnityIndirect CreateIndirectLight(v2f i, float3 viewDir, float3 normal, float smoothness) {
+UnityIndirect CreateIndirectLight(v2f i, float3 viewDir, float3 normal, float smoothness)
+{
     UnityIndirect indirectLight;
     indirectLight.diffuse = 0;
     indirectLight.specular = 0;
 
-//#if defined(VERTEXLIGHT_ON)
+    //#if defined(VERTEXLIGHT_ON)
     //indirectLight.diffuse = i.vertexLightColor;
-//#endif
+    //#endif
 
-#if defined(FORWARD_BASE_PASS)
+    #if defined(FORWARD_BASE_PASS)
     indirectLight.diffuse += max(0, ShadeSH9(float4(normal, 1)));
     float3 reflectionDir = reflect(-viewDir, normal);
     Unity_GlossyEnvironmentData envData;
@@ -148,7 +148,7 @@ UnityIndirect CreateIndirectLight(v2f i, float3 viewDir, float3 normal, float sm
     indirectLight.specular = Unity_GlossyEnvironment(
         UNITY_PASS_TEXCUBE(unity_SpecCube0), unity_SpecCube0_HDR, envData
     );
-#endif
+    #endif
 
     return indirectLight;
 }
@@ -170,11 +170,11 @@ fixed4 lighting(SurfaceOutputWater s, v2f i)
     UnityLight light = CreateLight(i);
     UnityIndirect indirect = CreateIndirectLight(i, worldViewDir, s.Normal, s.Smoothness);
 
-#if defined(FORWARD_BASE_PASS)
+    #if defined(FORWARD_BASE_PASS)
     float3 extraLighting = UNITY_ACCESS_INSTANCED_PROP(Props, _LightingColor);
-#else
+    #else
     float3 extraLighting = 0;
-#endif
+    #endif
     fixed3 scattering = (light.color /*+ indirect.diffuse*/ + extraLighting) * s.Scattering;
 
     return UNITY_BRDF_PBS(
@@ -208,9 +208,9 @@ float alerp(float a, float b, float t)
 
 fixed4 ApplyFogColor(v2f i, fixed4 col, fixed4 fogCol)
 {
-#if defined(FOG_LINEAR) || defined(FOG_EXP) || defined(FOG_EXP2)
+    #if defined(FOG_LINEAR) || defined(FOG_EXP) || defined(FOG_EXP2)
     UNITY_APPLY_FOG_COLOR(i.fogCoord, col, fogCol);
-#endif
+    #endif
     return col;
 }
 
@@ -220,9 +220,9 @@ fixed4 ApplyFogColor(v2f i, fixed4 col, fixed4 fogCol)
 fixed4 frag(v2f i) : SV_Target
 {
     UNITY_SETUP_INSTANCE_ID(i);
-#if UNITY_SINGLE_PASS_STEREO
+    #if UNITY_SINGLE_PASS_STEREO
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
-#endif
+    #endif
 
     float foam = 0;
     float waveHeight = 0;
@@ -250,33 +250,33 @@ fixed4 frag(v2f i) : SV_Target
         wind = wind * wind;
     #endif
 
-        // multiple overlapping waves
-        float2 nrm = GetWaves(i.worldUV.xz, _WaveScale.x, _WaveAmplitude.x, _WaveSpeed.x, half2(1,0.5));
-        nrm += GetWaves(i.worldUV.xz, _WaveScale.y, _WaveAmplitude.y, _WaveSpeed.y, half2(-1,-0.5));
-        nrm += GetWaves(i.worldUV.xz, _WaveScale.z, _WaveAmplitude.z, _WaveSpeed.z, half2(0.5,-1));
+    // multiple overlapping waves
+    float2 nrm = GetWaves(i.worldUV.xz, _WaveScale.x, _WaveAmplitude.x, _WaveSpeed.x, half2(1, 0.5));
+    nrm += GetWaves(i.worldUV.xz, _WaveScale.y, _WaveAmplitude.y, _WaveSpeed.y, half2(-1, -0.5));
+    nrm += GetWaves(i.worldUV.xz, _WaveScale.z, _WaveAmplitude.z, _WaveSpeed.z, half2(0.5, -1));
 
-        nrm /= 3;
+    nrm /= 3;
 
-        #ifdef WIND_MAP
+    #ifdef WIND_MAP
             nrm *= lerp(0.5, 1.3, wind);
-        #endif
+    #endif
 
-        half2 oldNrm = nrm; // pre-wavebuffer normals
+    half2 oldNrm = nrm; // pre-wavebuffer normals
 
-        nrm += waveNormals;
+    nrm += waveNormals;
 
-        // near fade for falloff at clipping plane
-        float nearFade = smoothstep(0,1,saturate(alerp(_ProjectionParams.y, _ProjectionParams.y * 3,  i.screenPos.z)));
+    // near fade for falloff at clipping plane
+    float nearFade = smoothstep(0, 1, saturate(alerp(_ProjectionParams.y, _ProjectionParams.y * 3, i.screenPos.z)));
 
-        float2 uvOffset = nrm * unity_CameraProjection._m11 * _Refraction * nearFade;
+    float2 uvOffset = nrm * unity_CameraProjection._m11 * _Refraction * nearFade;
 
-        float2 distUV = i.screenPos.xy;
-        distUV.xy += uvOffset;
-        distUV /= i.screenPos.w;
+    float2 distUV = i.screenPos.xy;
+    distUV.xy += uvOffset;
+    distUV /= i.screenPos.w;
 
-        float depth = GetDepth(i, distUV);
-        // fade for intersections with terrain
-        float transitionFade = smoothstep(0, 1, saturate(depth / _Transition));
+    float depth = GetDepth(i, distUV);
+    // fade for intersections with terrain
+    float transitionFade = smoothstep(0, 1, saturate(depth / _Transition));
 
     #if REFRACTION_DEPTH_CORRECTION
         // GO BACK TO UNDISTORTED UVS IF NEGATIVE DEPTH
@@ -287,7 +287,7 @@ fixed4 frag(v2f i) : SV_Target
     #endif
 
 
-#if defined(FORWARD_BASE_PASS)
+    #if defined(FORWARD_BASE_PASS)
 
     fixed4 col = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_WaterGrab, distUV);
 
@@ -297,9 +297,9 @@ fixed4 frag(v2f i) : SV_Target
     fixed4 absorb = pow(_AbsorptionColor, exp);
     col *= absorb;
     //col *= pow(ApplyFogColor(i, _AbsorptionColor, 1), clamp(depth * _Density, 1e-10, 1e+10));
-#else
+    #else
     fixed4 col = 0;
-#endif
+    #endif
 
     fixed3 scattering = _ScatteringColor.rgb;
     float scatterAmount = (1 - pow(2.71828, -clamp(depth * _Density * _ScatteringColor.a, 1e-10, 1e+10)));
@@ -310,7 +310,7 @@ fixed4 frag(v2f i) : SV_Target
     // foam Intersection
     foam += saturate(alerp(_FoamDepth, 0, depth)) * saturate(alerp(0, _FoamDepth / 10, depth));
 
-    float2 foamDistort = GetWaves(i.worldUV.xz, 1 / _FoamMap_ST.x * 20, 0.1, 0.13, half2(1,0.5));
+    float2 foamDistort = GetWaves(i.worldUV.xz, 1 / _FoamMap_ST.x * 20, 0.1, 0.13, half2(1, 0.5));
     float2 fuv = TRANSFORM_TEX(((i.worldUV.xz - float2(0.05, 0.03) * _Time.g + foamDistort) / 10), _FoamMap);
     half foamMask = tex2D(_FoamMap, fuv);
     foamMask = saturate(foamMask);
@@ -330,7 +330,7 @@ fixed4 frag(v2f i) : SV_Target
 
     fixed4 light = lighting(o, i) * transitionFade;
 
-#if FOG_ENABLED
+    #if FOG_ENABLED
     col += light;
 
     #if defined(FORWARD_BASE_PASS)
@@ -338,11 +338,11 @@ fixed4 frag(v2f i) : SV_Target
     #else
         UNITY_APPLY_FOG_COLOR(i.fogCoord, col, fixed4(0, 0, 0, 0));
     #endif
-#else
+    #else
     // only apply fog to light
     UNITY_APPLY_FOG_COLOR(i.fogCoord, light, fixed4(0, 0, 0, 0));
     col += light;
-#endif
+    #endif
 
 
     return col;
